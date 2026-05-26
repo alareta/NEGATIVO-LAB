@@ -10,7 +10,7 @@ Sin instalación, sin build, sin dependencias, sin red. Descargar, doble clic, l
 
 ## English
 
-![Negativo Lab — main view](docs/screenshot-main.png)
+![Negativo Lab — main view](docs/screenshot-main.jpg)
 
 ### What it is
 
@@ -57,7 +57,6 @@ settings are applied to all images.
 - **Batch processing** with a single pipeline pass per image and live
   thumbnails derived from the same Float32 that gets exported.
 
-![Eyedropper calibration](docs/screenshot-picker.png)
 
 ### Modes at a glance
 
