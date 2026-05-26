@@ -144,8 +144,6 @@ ajustes actuales se aplican a todas las imágenes.
 - **Procesamiento por lotes** con una sola pasada del pipeline por imagen y
   miniaturas derivadas del mismo Float32 que se exporta.
 
-![Calibración con cuentagotas](docs/screenshot-picker.png)
-
 ### Modos de un vistazo
 
 **Negativo:**
