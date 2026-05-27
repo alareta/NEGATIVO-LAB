@@ -93,7 +93,7 @@ MIT. See [LICENSE](LICENSE).
 
 ## Español
 
-![Negativo Lab — vista principal](docs/screenshot-main.png)
+![Negativo Lab — vista principal](docs/screenshot-main.jpg)
 
 ### Qué es
 
