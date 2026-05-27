@@ -537,6 +537,89 @@
     letter-spacing: 0.05em;
   }
 
+  /* Foco visible en sliders para edición por teclado. Sin esto, Tab funciona
+     pero el usuario no ve qué slider está activo. Halo discreto en color
+     acento, sin interferir con el thumb. */
+  .sl-row input[type=range]:focus {
+    outline: none;
+  }
+  .sl-row input[type=range]:focus::-webkit-slider-thumb {
+    box-shadow: 0 0 0 3px rgba(200,184,154,0.35);
+    background: var(--accent2);
+  }
+  .sl-row.focused label { color: var(--accent); }
+
+  /* Panel de atajos colapsable. Usa <details>/<summary> nativos: cero JS para
+     el toggle y comportamiento accesible por defecto. El summary parece un
+     botón del resto de la UI. La lista en sí va en .shortcut-list con
+     pares "tecla → acción" alineados en dos columnas. */
+  .shortcuts {
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    background: var(--bg);
+    overflow: hidden;
+  }
+  .shortcuts > summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 7px 10px;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    color: var(--text2);
+    user-select: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: color 0.15s, background 0.15s;
+  }
+  .shortcuts > summary::-webkit-details-marker { display: none; }
+  .shortcuts > summary:hover { color: var(--accent); background: var(--bg3); }
+  .shortcuts > summary::after {
+    content: '+';
+    font-family: var(--mono);
+    color: var(--text3);
+    font-size: 12px;
+    transition: transform 0.2s;
+  }
+  .shortcuts[open] > summary::after { content: '−'; }
+  .shortcuts[open] > summary { color: var(--accent); border-bottom: 1px solid var(--border); }
+  .shortcut-list {
+    padding: 8px 10px 10px;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 4px 10px;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text2);
+    letter-spacing: 0.02em;
+  }
+  .shortcut-list .sec {
+    grid-column: 1 / -1;
+    color: var(--text3);
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-top: 6px;
+    padding-top: 4px;
+    border-top: 1px dashed var(--border);
+  }
+  .shortcut-list .sec:first-child { margin-top: 0; padding-top: 0; border-top: none; }
+  .shortcut-list kbd {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--accent);
+    background: var(--bg3);
+    border: 1px solid var(--border2);
+    border-radius: 2px;
+    padding: 1px 5px;
+    min-width: 14px;
+    text-align: center;
+    display: inline-block;
+    letter-spacing: 0;
+  }
+  .shortcut-list kbd + kbd { margin-left: 2px; }
+
   /* Scrollbar */
   ::-webkit-scrollbar { width: 4px; }
   ::-webkit-scrollbar-track { background: transparent; }
@@ -682,6 +765,40 @@
     </div><!-- /sidebar-scroll -->
 
     <div class="sidebar-footer">
+      <details class="shortcuts" id="shortcutsPanel">
+        <summary>⌘ Atajos</summary>
+        <div class="shortcut-list">
+          <div class="sec">Archivo</div>
+          <kbd>O</kbd><span>Abrir imagen</span>
+          <kbd>S</kbd><span>Guardar</span>
+          <kbd>⇧</kbd><kbd>S</kbd><span style="grid-column:2/-1">Alternar PNG / TIFF</span>
+
+          <div class="sec">Vista</div>
+          <kbd>1</kbd><span>Vista única</span>
+          <kbd>2</kbd><span>Lote</span>
+          <kbd>N</kbd><span>Negativo</span>
+          <kbd>P</kbd><span>Positivo</span>
+
+          <div class="sec">Herramientas</div>
+          <kbd>B</kbd><span>Picker Base+Fog</span>
+          <kbd>D</kbd><span>Picker Dmax</span>
+          <kbd>C</kbd><span>Mostrar clipping</span>
+          <kbd>A</kbd><span>Auto niveles</span>
+          <kbd>R</kbd><span>Resetear</span>
+          <kbd>Esc</kbd><span>Cancelar picker</span>
+
+          <div class="sec">Sliders</div>
+          <kbd>Tab</kbd><span>Foco siguiente</span>
+          <kbd>⇧</kbd><kbd>Tab</kbd><span style="grid-column:2/-1">Foco anterior</span>
+          <kbd>←</kbd><kbd>→</kbd><span style="grid-column:2/-1">±1 al slider con foco</span>
+          <kbd>⇧</kbd><kbd>←</kbd><span style="grid-column:2/-1">±10 al slider con foco</span>
+          <kbd>0</kbd><span>Resetear ese slider</span>
+
+          <div class="sec">Historial</div>
+          <kbd>Z</kbd><span>Deshacer</span>
+          <kbd>⇧</kbd><kbd>Z</kbd><span style="grid-column:2/-1">Rehacer</span>
+        </div>
+      </details>
       <div class="format-toggle" role="group" aria-label="Formato de exportación">
         <button class="fmt-btn active" data-format="png" title="PNG 8-bit con dither TPDF. Default recomendado para scans de 8-bit.">PNG <span class="fmt-meta">8-bit</span></button>
         <button class="fmt-btn" data-format="tiff" title="TIFF 16-bit con compresión Deflate. Útil sólo si vas a aplicar curvas o niveles agresivas en un editor posterior. Para scans 8-bit no aporta más información que el PNG.">TIFF <span class="fmt-meta">16-bit</span></button>
@@ -1439,6 +1556,14 @@ function loadFile(file) {
     autoLevels();
     render();
 
+    // Reset del historial para esta nueva imagen y push del snapshot inicial
+    // (post-autoLevels). Sin esto, los undos podrían "saltar atrás" a estado
+    // de una imagen anterior, que no es lo que el usuario espera.
+    history = [];
+    histIdx = -1;
+    if (histDebounceTimer) { clearTimeout(histDebounceTimer); histDebounceTimer = null; }
+    pushHistory(true);
+
     const hint = document.getElementById('saveHint');
     hint.style.display = 'block';
     hint.innerHTML = `<span style="color:var(--text3)">Imagen cargada:</span> ${fullW}×${fullH}px`;
@@ -2138,6 +2263,7 @@ function onPickerClick(ev) {
   updatePickerCalibratedUI();
   render();
   renderPickerOverlay();
+  pushHistory(true);
 }
 
 // Reset de la calibración (lo expone el botón Reset general).
@@ -2198,6 +2324,7 @@ document.querySelectorAll('#inputTypeSel .invmode-btn').forEach(btn => {
     applyPickedToPipeline();
     render();
     renderPickerOverlay();
+    pushHistory(true);
   });
 });
 
@@ -2227,11 +2354,10 @@ function rebuildSubModeUI() {
         b.classList.toggle('active', b.dataset.sub === newSub));
       // Re-aplicar calibración del picker (depende del sub-modo).
       applyPickedToPipeline();
-	  // Re-aplicar calibración del picker (depende del sub-modo).
-	  applyPickedToPipeline();
-	  autoLevels();
-	  render();
-	  renderPickerOverlay();
+      autoLevels();
+      render();
+      renderPickerOverlay();
+      pushHistory(true);
     });
   });
 }
@@ -2255,13 +2381,367 @@ origWrapEl.addEventListener('mouseleave', () => {
 });
 origWrapEl.addEventListener('click', onPickerClick);
 
-// Esc cancela el modo picker
+// ── HISTORIAL Undo / Redo ──────────────────────────────────────────────────
+// Snapshot del estado editable: los 11 sliders + tipo + sub-modo + picker.
+// Lo que NO va al historial: la imagen cargada, el formato de exportación
+// (PNG/TIFF), el clipping overlay, ni la pestaña activa. Son ajustes de
+// "sesión", no decisiones de revelado, y meterlos al historial sería
+// inesperado (deshacer un movimiento de slider no debería cerrar el lote).
+//
+// Estrategia: cola circular de 30 snapshots. El cursor `histIdx` apunta al
+// snapshot actual. Cada push trunca el "futuro" si estamos navegando atrás,
+// como un editor de texto normal. El primer snapshot se crea tras cargar
+// imagen y tras cualquier acción que no sea undo/redo en sí.
+//
+// Coalescing de sliders: arrastrar un slider dispara muchos `input` events,
+// uno por píxel. Si pusháramos uno por evento, una sola pasada de "tirar de
+// gamma" llenaría el historial entero. Solución: pushHistory tiene un debounce
+// de 350ms. Mientras tiras del slider los eventos colapsan en un solo
+// snapshot; al soltar (o al pasar de slider, o al usar otro atajo) se confirma.
+const HIST_MAX = 30;
+let history = [];
+let histIdx = -1;
+let histDebounceTimer = null;
+let histSuppressed = false; // true durante applySnapshot para no re-pushear
+
+function captureState() {
+  return {
+    slBlack: +document.getElementById('slBlack').value,
+    slWhite: +document.getElementById('slWhite').value,
+    slGamma: +document.getElementById('slGamma').value,
+    slS:     +document.getElementById('slS').value,
+    slTE0:   +document.getElementById('slTE0').value,
+    slTE1:   +document.getElementById('slTE1').value,
+    slTE2:   +document.getElementById('slTE2').value,
+    slTE3:   +document.getElementById('slTE3').value,
+    slTE4:   +document.getElementById('slTE4').value,
+    slStr:   +document.getElementById('slStr').value,
+    slClar:  +document.getElementById('slClar').value,
+    inputType: inputType,
+    subMode: getSubMode(),
+    pickedBaseFog: pickedBaseFog,
+    pickedDmax: pickedDmax,
+    pickedBaseFogXY: pickedBaseFogXY ? pickedBaseFogXY.slice() : null,
+    pickedDmaxXY: pickedDmaxXY ? pickedDmaxXY.slice() : null,
+  };
+}
+
+// Devuelve true si dos snapshots son equivalentes. Evita guardar pushes
+// idénticos consecutivos (p.ej. abrir/cerrar el panel de atajos no debe
+// alterar el historial — pero por si acaso, esta función es la red).
+function statesEqual(a, b) {
+  if (!a || !b) return false;
+  const keys = ['slBlack','slWhite','slGamma','slS','slTE0','slTE1','slTE2','slTE3','slTE4','slStr','slClar','inputType','subMode','pickedBaseFog','pickedDmax'];
+  for (const k of keys) if (a[k] !== b[k]) return false;
+  return true;
+}
+
+// Empuja un snapshot al historial. Si flag immediate=true (default false),
+// se confirma inmediatamente sin debounce — para acciones discretas como Auto,
+// Reset, picker, cambio de tipo, etc.
+function pushHistory(immediate) {
+  if (histSuppressed) return;
+  if (histDebounceTimer) { clearTimeout(histDebounceTimer); histDebounceTimer = null; }
+  const doIt = () => {
+    const snap = captureState();
+    if (histIdx >= 0 && statesEqual(history[histIdx], snap)) return;
+    // Truncar futuro si estábamos navegando atrás
+    if (histIdx < history.length - 1) history.length = histIdx + 1;
+    history.push(snap);
+    if (history.length > HIST_MAX) history.shift();
+    else histIdx++;
+    if (histIdx >= history.length) histIdx = history.length - 1;
+  };
+  if (immediate) doIt();
+  else histDebounceTimer = setTimeout(doIt, 350);
+}
+
+// Aplica un snapshot al estado de la app: actualiza sliders, tipo, sub-modo,
+// picker. NO empuja al historial (histSuppressed=true).
+function applySnapshot(snap) {
+  if (!snap) return;
+  histSuppressed = true;
+  try {
+    // Tipo de entrada (puede cambiar si el snapshot venía de otro modo)
+    if (snap.inputType !== inputType) {
+      inputType = snap.inputType;
+      document.querySelectorAll('#inputTypeSel .invmode-btn').forEach(b =>
+        b.classList.toggle('active', b.dataset.input === inputType));
+      rebuildSubModeUI();
+      updatePickerLabelsForType();
+    }
+    // Sub-modo del tipo actual
+    if (snap.subMode !== getSubMode()) {
+      subModeByType[inputType] = snap.subMode;
+      const cont = document.getElementById('subModeSel');
+      cont.querySelectorAll('.invmode-btn').forEach(b =>
+        b.classList.toggle('active', b.dataset.sub === snap.subMode));
+    }
+    // Sliders. Uso setSlider con los mismos decimales que cada uno.
+    const decs = {slBlack:0,slWhite:0,slGamma:2,slS:0,slTE0:0,slTE1:0,slTE2:0,slTE3:0,slTE4:0,slStr:0,slClar:0};
+    const outs = {slBlack:'vBlack',slWhite:'vWhite',slGamma:'vGamma',slS:'vS',slTE0:'vTE0',slTE1:'vTE1',slTE2:'vTE2',slTE3:'vTE3',slTE4:'vTE4',slStr:'vStr',slClar:'vClar'};
+    Object.keys(decs).forEach(id => setSlider(id, outs[id], snap[id], decs[id]));
+    // Picker
+    pickedBaseFog = snap.pickedBaseFog;
+    pickedDmax = snap.pickedDmax;
+    pickedBaseFogXY = snap.pickedBaseFogXY ? snap.pickedBaseFogXY.slice() : null;
+    pickedDmaxXY = snap.pickedDmaxXY ? snap.pickedDmaxXY.slice() : null;
+    updatePickerCalibratedUI();
+    applyPickedToPipeline();
+    render();
+    renderPickerOverlay();
+  } finally {
+    histSuppressed = false;
+  }
+}
+
+function undo() {
+  if (histIdx <= 0) return;
+  // Si hay un debounce pendiente, confirmarlo antes de retroceder, para no
+  // perder el estado actual "en vuelo".
+  if (histDebounceTimer) { clearTimeout(histDebounceTimer); histDebounceTimer = null; pushHistory(true); }
+  histIdx--;
+  applySnapshot(history[histIdx]);
+}
+
+function redo() {
+  if (histIdx >= history.length - 1) return;
+  histIdx++;
+  applySnapshot(history[histIdx]);
+}
+
+// ── ATAJOS DE TECLADO ──────────────────────────────────────────────────────
+//
+// Single keydown router. Reglas:
+// - Se ignoran TODOS los atajos si el foco está en un <input type=text>,
+//   <textarea> o elemento contentEditable. Los <input type=range> sí
+//   responden (manejamos ← → 0 nosotros para tener Shift y resetear; las
+//   teclas nativas del range siguen funcionando porque preventDefault sólo
+//   se llama en las que interceptamos).
+// - Se ignoran si hay Ctrl/Cmd/Alt apretados (excepto Esc, que es siempre).
+//   Así no chocamos con atajos del navegador como Cmd+S, Ctrl+R.
+// - El bucle de sliders para Tab es nativo del navegador, no lo manejamos.
+//   Tab funciona porque los <input type=range> son focusables por defecto.
+
+// Lista de sliders en orden visual del sidebar (para 0=reset al default).
+const SLIDER_DEFAULTS = {
+  slBlack: 0, slWhite: 255, slGamma: 1.0, slS: 0,
+  slTE0: 0, slTE1: 0, slTE2: 0, slTE3: 0, slTE4: 0,
+  slStr: 0, slClar: 0
+};
+const SLIDER_DECIMALS = {
+  slBlack: 0, slWhite: 0, slGamma: 2, slS: 0,
+  slTE0: 0, slTE1: 0, slTE2: 0, slTE3: 0, slTE4: 0,
+  slStr: 0, slClar: 0
+};
+const SLIDER_OUT_IDS = {
+  slBlack: 'vBlack', slWhite: 'vWhite', slGamma: 'vGamma', slS: 'vS',
+  slTE0: 'vTE0', slTE1: 'vTE1', slTE2: 'vTE2', slTE3: 'vTE3', slTE4: 'vTE4',
+  slStr: 'vStr', slClar: 'vClar'
+};
+
+// ¿El foco está sobre uno de NUESTROS sliders?
+function focusedSlider() {
+  const el = document.activeElement;
+  if (!el || el.tagName !== 'INPUT' || el.type !== 'range') return null;
+  if (!(el.id in SLIDER_DEFAULTS)) return null;
+  return el;
+}
+
+// Devuelve true si el foco está en un campo donde no queremos interceptar
+// teclas (texto editable). Sliders NO cuentan como texto editable.
+function isTextInputFocused() {
+  const el = document.activeElement;
+  if (!el) return false;
+  if (el.isContentEditable) return true;
+  if (el.tagName === 'TEXTAREA') return true;
+  if (el.tagName === 'INPUT') {
+    const t = (el.type || 'text').toLowerCase();
+    return t === 'text' || t === 'search' || t === 'email' || t === 'url' ||
+           t === 'tel' || t === 'password' || t === 'number';
+  }
+  return false;
+}
+
+// Cambia el step de un slider y dispara render. Usado por ← → y Shift+← →.
+function nudgeSlider(slider, delta) {
+  const min = +slider.min, max = +slider.max;
+  const step = +slider.step || 1;
+  const cur = +slider.value;
+  let next = cur + delta * step;
+  if (next < min) next = min;
+  else if (next > max) next = max;
+  // Para evitar imprecisiones (gamma step=0.05) redondeamos al step.
+  const dec = SLIDER_DECIMALS[slider.id] || 0;
+  next = +next.toFixed(dec >= 2 ? dec : 4);
+  slider.value = next;
+  document.getElementById(SLIDER_OUT_IDS[slider.id]).textContent = next.toFixed(dec);
+  render();
+  pushHistory(false); // debounced
+}
+
+// Resetea un slider concreto a su default.
+function resetOneSlider(slider) {
+  const id = slider.id;
+  const def = SLIDER_DEFAULTS[id];
+  setSlider(id, SLIDER_OUT_IDS[id], def, SLIDER_DECIMALS[id]);
+  render();
+  pushHistory(true);
+}
+
+// Activa la tab Single o Batch. Reaprovecha el flujo de los listeners de tab.
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  const t = document.querySelector(`[data-tab="${name}"]`);
+  const v = document.getElementById('view-' + name);
+  if (t && v) { t.classList.add('active'); v.classList.add('active'); }
+}
+
+// Cambia inputType desde teclado. Replica lo que hace el listener del
+// botón inputType. Sin pasar de Negativo a Positivo o viceversa si ya estamos.
+function setInputTypeKb(t) {
+  if (t === inputType) return;
+  inputType = t;
+  document.querySelectorAll('#inputTypeSel .invmode-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.input === inputType));
+  pickedBaseFog = null; pickedDmax = null;
+  pickedBaseFogXY = null; pickedDmaxXY = null;
+  setPickerMode(null);
+  updatePickerCalibratedUI();
+  rebuildSubModeUI();
+  updatePickerLabelsForType();
+  applyPickedToPipeline();
+  render();
+  renderPickerOverlay();
+  pushHistory(true);
+}
+
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape' && pickerMode) setPickerMode(null);
+  // Esc siempre: cancela picker
+  if (e.key === 'Escape') {
+    if (pickerMode) { setPickerMode(null); e.preventDefault(); }
+    return;
+  }
+
+  // Si el usuario está escribiendo en un input de texto, no interceptamos.
+  if (isTextInputFocused()) return;
+
+  // Cualquier modificador no esperado: dejamos paso al navegador.
+  // (Shift sí lo aceptamos para combinarlo con S, Z, Tab, flechas).
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+  // Atajos sobre el slider con foco: ← → Shift+← → 0
+  const sl = focusedSlider();
+  if (sl) {
+    if (e.key === 'ArrowLeft') {
+      nudgeSlider(sl, e.shiftKey ? -10 : -1);
+      e.preventDefault();
+      return;
+    }
+    if (e.key === 'ArrowRight') {
+      nudgeSlider(sl, e.shiftKey ? 10 : 1);
+      e.preventDefault();
+      return;
+    }
+    if (e.key === '0') {
+      resetOneSlider(sl);
+      e.preventDefault();
+      return;
+    }
+    // Resto de teclas: caen al router global (un usuario puede pulsar 'S'
+    // teniendo foco en un slider y esperar que guarde igualmente).
+  }
+
+  // Router global. Comparamos con e.key normalizado (mayúsculas).
+  // Distinguimos 'S' (Shift+s, alterna formato) de 's' (guardar).
+  const k = e.key;
+
+  // Atajos con Shift
+  if (e.shiftKey) {
+    if (k === 'S') {
+      // Alternar PNG ↔ TIFF
+      document.querySelectorAll('.fmt-btn').forEach(b => {
+        if (!b.classList.contains('active')) b.click();
+      });
+      e.preventDefault();
+      return;
+    }
+    if (k === 'Z') {
+      redo();
+      e.preventDefault();
+      return;
+    }
+    return; // otros Shift+algo: dejar pasar
+  }
+
+  // Atajos simples (sin modificadores)
+  switch (k.toLowerCase()) {
+    case 'o':
+      document.getElementById('btnOpen').click();
+      e.preventDefault();
+      break;
+    case 's':
+      // Guardado: sólo si hay imagen en single y la tab activa es single.
+      // En lote no tiene sentido (sería ambiguo qué guardar). Si el usuario
+      // está en lote, ignoramos para evitar sorpresas.
+      if (document.querySelector('.tab.active')?.dataset.tab === 'single' && fullData) {
+        document.getElementById('btnSaveSingle').click();
+        e.preventDefault();
+      }
+      break;
+    case '1':
+      switchTab('single');
+      e.preventDefault();
+      break;
+    case '2':
+      switchTab('batch');
+      e.preventDefault();
+      break;
+    case 'n':
+      setInputTypeKb('negativo');
+      e.preventDefault();
+      break;
+    case 'p':
+      setInputTypeKb('positivo');
+      e.preventDefault();
+      break;
+    case 'b':
+      if (!previewData) break;
+      setPickerMode(pickerMode === 'basefog' ? null : 'basefog');
+      e.preventDefault();
+      break;
+    case 'd':
+      if (!previewData) break;
+      setPickerMode(pickerMode === 'dmax' ? null : 'dmax');
+      e.preventDefault();
+      break;
+    case 'c': {
+      const chk = document.getElementById('chkClip');
+      chk.checked = !chk.checked;
+      chk.dispatchEvent(new Event('change'));
+      e.preventDefault();
+      break;
+    }
+    case 'a':
+      autoLevels();
+      render();
+      pushHistory(true);
+      e.preventDefault();
+      break;
+    case 'r':
+      document.getElementById('btnReset').click();
+      e.preventDefault();
+      break;
+    case 'z':
+      undo();
+      e.preventDefault();
+      break;
+  }
 });
 
 // Auto / Reset
-document.getElementById('btnAuto').addEventListener('click', () => { autoLevels(); render(); });
+document.getElementById('btnAuto').addEventListener('click', () => { autoLevels(); render(); pushHistory(true); });
 document.getElementById('btnReset').addEventListener('click', () => {
   const defs = {slBlack:0,slWhite:255,slGamma:1.0,slS:0,slTE0:0,slTE1:0,slTE2:0,slTE3:0,slTE4:0,slStr:0,slClar:0};
   const outs = {slBlack:'vBlack',slWhite:'vWhite',slGamma:'vGamma',slS:'vS',slTE0:'vTE0',slTE1:'vTE1',slTE2:'vTE2',slTE3:'vTE3',slTE4:'vTE4',slStr:'vStr',slClar:'vClar'};
@@ -2269,6 +2749,7 @@ document.getElementById('btnReset').addEventListener('click', () => {
   Object.keys(defs).forEach(id => { setSlider(id, outs[id], defs[id], decs[id]); });
   resetPicker();
   render();
+  pushHistory(true);
 });
 
 // Save single
@@ -2303,10 +2784,22 @@ const sliderMap = [
   ['slStr','vStr',0],['slClar','vClar',0]
 ];
 sliderMap.forEach(([id, outId, dec]) => {
-  document.getElementById(id).addEventListener('input', function() {
+  const el = document.getElementById(id);
+  el.addEventListener('input', function() {
     document.getElementById(outId).textContent = parseFloat(this.value).toFixed(dec);
     render();
+    pushHistory(false); // debounced
   });
+  // Confirmar el snapshot al soltar el slider (sin esperar al debounce de 350ms).
+  // Útil cuando el usuario suelta y a los 100ms hace otra acción: queremos
+  // que el arrastre completo quede como UN snapshot ya cerrado.
+  el.addEventListener('change', function() {
+    pushHistory(true);
+  });
+  // Resaltado de la fila enfocada (label en color acento). El estilo del thumb
+  // ya está cubierto por la regla CSS :focus, esto es sólo para el label.
+  el.addEventListener('focus',  () => el.parentElement.classList.add('focused'));
+  el.addEventListener('blur',   () => el.parentElement.classList.remove('focused'));
 });
 
 // Drag & drop global
