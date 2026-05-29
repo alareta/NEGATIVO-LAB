@@ -769,7 +769,7 @@
       <div class="sl-row"><label>Gamma</label><input type="range" id="slGamma" min="0.3" max="3.0" step="0.05" value="1.0"><span class="val" id="vGamma">1.00</span></div>
       <div class="sl-row"><label>Curva S</label><input type="range" id="slS" min="0" max="100" step="1" value="0"><span class="val" id="vS">0</span></div>
       <div class="clip-toggle-row" title="Sobre el procesado: rojo=luces recortadas, azul=sombras recortadas">
-        <label for="chkClip" class="clip-label">Mostrar clipping</label>
+        <label for="chkClip" class="clip-label">Mostrar recorte</label>
         <span class="clip-swatch clip-low"></span>
         <span class="clip-swatch clip-high"></span>
         <input type="checkbox" id="chkClip" class="clip-checkbox">
@@ -783,8 +783,8 @@
       <div class="sl-row"><label>Blancos</label><input type="range" id="slTE4" min="-100" max="100" step="1" value="0"><span class="val" id="vTE4">0</span></div>
 
       <div class="section-title">Microcontraste</div>
-      <div class="sl-row"><label>Structure</label><input type="range" id="slStr" min="0" max="100" step="1" value="0"><span class="val" id="vStr">0</span></div>
-      <div class="sl-row"><label>Clarity</label><input type="range" id="slClar" min="0" max="100" step="1" value="0"><span class="val" id="vClar">0</span></div>
+      <div class="sl-row"><label>Estructura</label><input type="range" id="slStr" min="0" max="100" step="1" value="0"><span class="val" id="vStr">0</span></div>
+      <div class="sl-row"><label>Claridad</label><input type="range" id="slClar" min="0" max="100" step="1" value="0"><span class="val" id="vClar">0</span></div>
 
     </div><!-- /sidebar-scroll -->
 
@@ -804,9 +804,9 @@
           <kbd>P</kbd><span>Positivo</span>
 
           <div class="sec">Herramientas</div>
-          <kbd>B</kbd><span>Picker Base+Fog</span>
+          <kbd>B</kbd><span>Picker Base+Velo</span>
           <kbd>D</kbd><span>Picker Dmax</span>
-          <kbd>C</kbd><span>Mostrar clipping</span>
+          <kbd>C</kbd><span>Mostrar recorte</span>
           <kbd>A</kbd><span>Auto niveles</span>
           <kbd>R</kbd><span>Resetear</span>
           <kbd>Esc</kbd><span>Cancelar picker</span>
@@ -2293,7 +2293,7 @@ function updatePickerLabelsForType() {
   const bf = document.getElementById('btnPickBaseFog');
   const dm = document.getElementById('btnPickDmax');
   if (inputType === 'negativo') {
-    bf.querySelector('.label-main').textContent = '⊙ Base+Fog';
+    bf.querySelector('.label-main').textContent = '⊙ Base+Velo';
     bf.querySelector('.label-sub').textContent  = 'claro';
     bf.title = 'Calibrar el claro del negativo (sombras del positivo)';
     dm.querySelector('.label-main').textContent = '⊙ Dmax';
