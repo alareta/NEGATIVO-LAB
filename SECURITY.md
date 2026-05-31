@@ -1,21 +1,32 @@
 # Security Policy
 
-## Supported Versions
+## Versiones soportadas
 
-Use this section to tell people about which versions of your project are
-currently being supported with security updates.
+Negativo Lab es una aplicación de un único archivo HTML que se ejecuta
+enteramente en el navegador, sin servidor ni dependencias externas. Solo
+se da soporte de seguridad a la última versión publicada.
 
-| Version | Supported          |
+| Versión | Soportada          |
 | ------- | ------------------ |
-| 5.1.x   | :white_check_mark: |
-| 5.0.x   | :x:                |
-| 4.0.x   | :white_check_mark: |
-| < 4.0   | :x:                |
+| 1.0.x   | :white_check_mark: |
+| < 1.0   | :x:                |
 
-## Reporting a Vulnerability
+## Reportar una vulnerabilidad
 
-Use this section to tell people how to report a vulnerability.
+Si encuentras un problema de seguridad, por favor **no abras un issue
+público**. Repórtalo de forma privada por una de estas vías:
 
-Tell them where to go, how often they can expect to get an update on a
-reported vulnerability, what to expect if the vulnerability is accepted or
-declined, etc.
+- Usando "Report a vulnerability" en la pestaña Security del repositorio
+  (requiere tener activado Private vulnerability reporting).
+
+Procuraré responder en un plazo de 7 días. Si el reporte se acepta,
+publicaré un parche y un aviso (security advisory); si se descarta, te
+explicaré el motivo.
+
+## Alcance
+
+Toda la imagen se procesa en local y nunca se sube a ningún servidor.
+Los vectores relevantes son básicamente: procesado de archivos de imagen
+no confiables (corrupción de memoria del navegador, cuelgues) y la carga
+opcional de fuentes desde Google Fonts. No hay backend, autenticación ni
+almacenamiento de datos del usuario.
