@@ -644,6 +644,49 @@
   }
   .shortcut-list kbd + kbd { margin-left: 2px; }
 
+  /* Sección "Mezcla de canales" colapsable. Mismo mecanismo <details>/<summary>
+     que el panel de atajos, pero el summary se estiliza como un .section-title
+     (no como un botón) para que encaje con el resto de encabezados del sidebar.
+     El estado open lo decide loadFile según el análisis monocromo/color. */
+  .mix-section { margin-top: 18px; }
+  .mix-section > summary {
+    list-style: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text3);
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+    user-select: none;
+    transition: color 0.15s;
+  }
+  .mix-section > summary::-webkit-details-marker { display: none; }
+  .mix-section > summary::before {
+    content: '+';
+    font-size: 12px;
+    color: var(--text3);
+    transition: transform 0.2s;
+    width: 10px;
+  }
+  .mix-section[open] > summary::before { content: '−'; }
+  .mix-section > summary:hover { color: var(--text2); }
+  .mix-section[open] > summary { color: var(--accent); border-bottom-color: var(--border); }
+  .mix-summary-title { flex: 1; }
+  /* Badge con el veredicto del análisis (color / monocromo). Discreto. */
+  .mix-badge {
+    font-size: 8px;
+    letter-spacing: 0.08em;
+    color: var(--text3);
+    text-transform: none;
+  }
+  .mix-badge.color { color: var(--accent); }
+  .mix-body { padding-top: 10px; }
+
   /* Scrollbar */
   ::-webkit-scrollbar { width: 4px; }
   ::-webkit-scrollbar-track { background: transparent; }
@@ -718,7 +761,7 @@
 <header>
   <div class="logo">Negativo <span>/</span> Lab</div>
   <div class="header-actions">
-    <span class="tag">v1.0</span>
+    <span class="tag">v1.1</span>
     <span class="tag">B&amp;W · OFFLINE</span>
   </div>
 </header>
@@ -750,7 +793,7 @@
       <!-- Pickers. Sus labels cambian según el tipo de entrada. -->
       <div class="picker-row">
         <button class="picker-btn" id="btnPickBaseFog" title="Calibrar el claro del negativo (sombras del positivo)">
-          <span class="label-main">⊙ Base+Fog</span>
+          <span class="label-main">⊙ Base+Velo</span>
           <span class="label-sub">claro</span>
         </button>
         <button class="picker-btn" id="btnPickDmax" title="Calibrar el oscuro del negativo (luces del positivo)">
@@ -762,6 +805,21 @@
         <button class="btn" id="btnAuto">⚡ Auto niveles</button>
         <button class="btn" id="btnReset">↺ Resetear</button>
       </div>
+
+      <details class="mix-section" id="mixSection">
+        <summary><span class="mix-summary-title">Mezcla de canales</span><span class="mix-badge" id="mixBadge"></span></summary>
+        <div class="mix-body">
+          <div class="sl-row"><label>Rojo</label><input type="range" id="slMixR" min="-50" max="200" step="1" value="0"><span class="val" id="vMixR">0</span></div>
+          <div class="sl-row"><label>Verde</label><input type="range" id="slMixG" min="-50" max="200" step="1" value="100"><span class="val" id="vMixG">100</span></div>
+          <div class="sl-row"><label>Azul</label><input type="range" id="slMixB" min="-50" max="200" step="1" value="0"><span class="val" id="vMixB">0</span></div>
+          <div class="btn-row">
+            <button class="btn" id="btnMixGreen" title="Verde puro (comportamiento clásico de la app)">Verde</button>
+            <button class="btn" id="btnMixLuma" title="Luminancia Rec.709 perceptual">Luma</button>
+            <button class="btn" id="btnMixRed" title="Realza cielos y piel, oscurece follaje">Rojo</button>
+            <button class="btn" id="btnMixNorm" title="Reescala los tres pesos para que sumen 100% sin cambiar el brillo global">Normalizar</button>
+          </div>
+        </div>
+      </details>
 
       <div class="section-title">Rango tonal</div>
       <div class="sl-row"><label>Punto negro</label><input type="range" id="slBlack" min="0" max="200" step="1" value="0"><span class="val" id="vBlack">0</span></div>
@@ -907,6 +965,14 @@ const PREVIEW_MAX = 800;
 // _cached y salta el to16f cuando los recibe.
 let previewF32 = null, fullF32 = null;
 
+// La mezcla de canales toca toda la imagen. Durante el arrastre del slider sólo
+// recalculamos la PREVIEW (lo único visible) y marcamos la full como "sucia":
+// fullData/fullF32 quedan desfasados respecto al channelMix actual. Cualquier
+// consumidor de la full (guardar, auto-niveles) llama a ensureFullMix() antes,
+// que la reconstruye UNA vez si hace falta. Así arrastrar el slider no paga el
+// coste de remezclar + to16f + computeNegLogRange sobre 24MP en cada input.
+let fullDirty = false;
+
 // Densidades extremas del scan en log10. Se calculan una vez al cargar y se
 // usan por los sub-modos 'log' (Negativo) y 'normalize' (Positivo).
 // Definidas sobre LUZ LINEAL (después de srgbToLinear), no sobre el código 8-bit.
@@ -918,6 +984,20 @@ let negLogMin = 0, negLogMax = 3;
 //                (lineal: pasa tal cual / normalize: auto-stretch log).
 // Default 'negativo' por ser el caso principal y el branding de la app.
 let inputType = 'negativo';
+
+// Channel mixer: pesos de mezcla RGB → gris. Default = sólo verde (w=[0,1,0]),
+// que replica EXACTAMENTE el toGray original (canal verde puro). Así, sin tocar
+// los sliders, el comportamiento es idéntico al de siempre, bit a bit.
+// Se mezcla en código sRGB (igual que hacía toGray): es la convención de los
+// channel mixers fotográficos (Lightroom/SilverFast) y lo perceptualmente
+// predecible. Los pesos no se normalizan salvo que el usuario pulse "Normalizar".
+let channelMix = [0, 1, 0];
+
+// Buffers RGB originales sin convertir a gris. Los guardamos para recomputar el
+// gris al mover los sliders de mezcla SIN releer la imagen del disco. mixToGray
+// es destructivo (machaca los 3 canales con la mezcla), así que necesitamos la
+// copia intacta como fuente.
+let previewRGB = null, fullRGB = null;
 
 // Sub-modo. Las opciones válidas dependen de inputType:
 //   negativo: 'linear' | 'srgb' | 'log'   (default 'srgb')
@@ -971,13 +1051,32 @@ function getParams() {
 }
 
 // ── IMAGE PROCESSING ────────────────────────────────────────────────────────
-function toGray(id) {
-  const d = id.data;
-  for (let i = 0; i < d.length; i += 4) {
-    const g = d[i+1]; // canal verde: equivale a Rec.601 en scans B&W
-                     // y esquiva la máscara naranja en negativos color
-    d[i] = d[i+2] = g;
+// Mezcla ponderada RGB → gris desde un buffer fuente intacto (srcData),
+// escribiendo el resultado (los 3 canales iguales) en dstData. Mantener src y dst
+// separados permite recomputar la mezcla sin destruir el RGB original.
+//
+// La mezcla se hace en código sRGB 8-bit, igual que el toGray original. No
+// linealizamos: la convención de channel mixer fotográfico es operar en el
+// espacio del scan, y es lo perceptualmente predecible. Los pesos NO se
+// normalizan aquí: si suman != 1 el brillo global cambia (comportamiento
+// esperado; el botón "Normalizar" de la UI los reescala a suma 1 bajo demanda).
+function mixToGray(srcData, dstData, mix) {
+  const s = srcData.data, d = dstData.data;
+  const wR = mix[0], wG = mix[1], wB = mix[2];
+  for (let i = 0; i < s.length; i += 4) {
+    let v = s[i] * wR + s[i+1] * wG + s[i+2] * wB;
+    if (v < 0) v = 0; else if (v > 255) v = 255;
+    d[i] = d[i+1] = d[i+2] = v;
+    d[i+3] = 255;
   }
+}
+
+// Compatibilidad: convierte a gris in-place usando el channelMix actual. Lo
+// usan los sitios que leen una imagen nueva sobre un único ImageData (p.ej. el
+// batch). Como respeta channelMix, el lote hereda la mezcla automáticamente.
+// El canal verde sale por defecto (channelMix=[0,1,0]), idéntico al original.
+function toGray(id) {
+  mixToGray(id, id, channelMix);
 }
 
 
@@ -1571,7 +1670,11 @@ function render() {
     origWrap.insertBefore(co, origWrap.firstChild);
   }
   co.width = previewW; co.height = previewH;
-  co.getContext('2d').putImageData(previewData, 0, 0);
+  // Pintamos el RGB REAL del scan (previewRGB), no el gris mezclado. El canvas
+  // "ORIGINAL" debe mostrar el negativo/scan tal cual es; así, al ajustar la
+  // mezcla de canales, el usuario ve el color de partida sobre el que decide.
+  // Fallback a previewData por si previewRGB no estuviera (no debería pasar).
+  co.getContext('2d').putImageData(previewRGB || previewData, 0, 0);
 
   // Out canvas (no necesita overlay)
   const outWrap = document.getElementById('outWrap');
@@ -1640,6 +1743,158 @@ function computeNegLogRange() {
   negLogMax = r.max;
 }
 
+// Recomputa el gris desde los buffers RGB intactos con el channelMix actual,
+// regenera los cachés Float32 y todo lo derivado del gris. Es el equivalente
+// "barato" de recargar la imagen: no toca el disco, sólo re-mezcla en memoria.
+// Detección ligera de "imagen monocroma de facto" para decidir si la sección
+// de Mezcla de canales arranca plegada (B&N) o abierta (color real). NO oculta
+// nada: la sección siempre está; esto sólo elige su estado inicial.
+//
+// Ligereza: muestreo REGULAR con stride (no aleatorio — Math.random costaría
+// más que medir el píxel, y el regular es determinista, mismo veredicto siempre).
+// Apuntamos a ~8000 muestras como mucho, independientemente del tamaño. El cuerpo
+// del bucle es trivial: dos restas y una comparación, sin pow ni sqrt.
+//
+// Criterio: por cada muestra medimos la separación max−min entre R,G,B (en código
+// 8-bit). Una imagen gris perfecta da 0; ruido/viraje leve da valores pequeños;
+// color real da separaciones grandes en buena parte de los píxeles. Contamos qué
+// FRACCIÓN de muestras superan un umbral de separación. Mirar la fracción (no la
+// media) hace la detección robusta frente a: virados sepia uniformes (separación
+// moderada pero constante → no dispara), polvo/píxeles sueltos (pocos outliers no
+// mueven la fracción) y dominantes globales suaves del escáner.
+//
+// Devuelve true si la imagen tiene color real (→ abrir la sección).
+// Detecta si una imagen tiene COLOR REAL, distinguiéndolo de un B&N con
+// DOMINANTE / VIRADO (sepia, etc.). La clave: una dominante es un sesgo de color
+// CONSTANTE en toda la imagen; el color real es cromaticidad que VARÍA de unas
+// zonas a otras. Medimos lo segundo, no lo primero.
+//
+// El detector anterior (max−min absoluto entre canales) fallaba en virados: un
+// sepia uniforme tiene R>G>B en todos los píxeles → separación alta → falso
+// "color". Aquí trabajamos en CROMATICIDAD (cada canal dividido por la luma del
+// propio píxel): un gris virado tiene cromaticidad casi constante (mismo tinte en
+// todas partes), así que al restar la cromaticidad MEDIA (= la dominante) queda
+// casi plano. El color real conserva dispersión tras esa resta.
+//
+// Dos cuidados de robustez:
+//  - Se ignoran las sombras (luma < LUMA_MIN): ahí la luma es pequeña y dividir
+//    por ella amplifica el ruido del scan a cromaticidad falsa. Medir color en
+//    sombras es medir grano.
+//  - Se resta la cromaticidad media ponderada (la dominante global) antes de
+//    medir desviaciones, de modo que un tinte uniforme no cuenta como color.
+//
+// Ligereza: muestreo regular por stride (~8000 muestras, coste fijo). Dos pasadas
+// sobre las muestras (1ª: cromaticidad media; 2ª: dispersión), sin pow ni sqrt.
+//
+// NOTA: esto separa limpiamente un B&N (con o sin virado) de un color saturado.
+// Una imagen que sea color real pero muy desaturado (p.ej. un original a color
+// apagado, con dominante fuerte y poca variación cromática) cae en una zona
+// genuinamente ambigua y puede salir como "color": es correcto, técnicamente lo
+// es. Para esos casos límite la sección colapsable manual es la red (un clic).
+function detectHasColor(rgbData) {
+  if (!rgbData) return false;
+  const d = rgbData.data;
+  const nPx = d.length / 4;
+  const TARGET = 8000;
+  const stride = Math.max(1, Math.floor(nPx / TARGET));
+  const LUMA_MIN = 40;          // por debajo de esto, la cromaticidad es ruido
+  const SPREAD_THRESHOLD = 0.18; // dispersión de cromaticidad que cuenta como color
+  const FRAC_THRESHOLD = 0.05;   // fracción de muestras con color real → imagen color
+  // Calibración (sobre casos de referencia): con estos valores, un B&N neutro da
+  // ~1% y un sepia uniforme ~1.5% (ambos → monocromo), mientras un color saturado
+  // da ~100%. El margen 1.5% ≪ 5% ≪ 100% es amplio y robusto.
+
+  // ── Pasada 1: cromaticidad media (la dominante) sobre muestras válidas ──
+  let sumCr = 0, sumCg = 0, sumCb = 0, valid = 0;
+  // Guardamos las cromaticidades de las muestras válidas para no recalcular
+  // luma/divisiones en la 2ª pasada. Buffer pequeño (~8000 × 3 floats).
+  const crArr = [], cgArr = [], cbArr = [];
+  for (let i = 0; i < nPx; i += stride) {
+    const o = i * 4;
+    const r = d[o], g = d[o+1], b = d[o+2];
+    const luma = (r + g + b) / 3;
+    if (luma < LUMA_MIN) continue; // ignorar sombras
+    const inv = 1 / (luma + 1e-6);
+    const cr = r * inv, cg = g * inv, cb = b * inv;
+    crArr.push(cr); cgArr.push(cg); cbArr.push(cb);
+    sumCr += cr; sumCg += cg; sumCb += cb;
+    valid++;
+  }
+  if (valid < 20) return false; // imagen casi toda en sombra: trátala como mono
+  const mCr = sumCr / valid, mCg = sumCg / valid, mCb = sumCb / valid;
+
+  // ── Pasada 2: cuántas muestras se desvían de la dominante (= color real) ──
+  let colored = 0;
+  for (let k = 0; k < valid; k++) {
+    // cromaticidad de la muestra menos la dominante media
+    const cr = crArr[k] - mCr, cg = cgArr[k] - mCg, cb = cbArr[k] - mCb;
+    // spread = max−min de las tres desviaciones
+    let mn = cr, mx = cr;
+    if (cg < mn) mn = cg; else if (cg > mx) mx = cg;
+    if (cb < mn) mn = cb; else if (cb > mx) mx = cb;
+    if (mx - mn >= SPREAD_THRESHOLD) colored++;
+  }
+  return (colored / valid) >= FRAC_THRESHOLD;
+}
+
+// Aplica el veredicto del análisis a la UI: abre/pliega la sección y pone el
+// badge informativo. Se llama desde loadFile tras tener fullRGB.
+function updateMixSectionForImage() {
+  const sec = document.getElementById('mixSection');
+  const badge = document.getElementById('mixBadge');
+  if (!sec) return;
+  const hasColor = detectHasColor(fullRGB);
+  sec.open = hasColor;
+  if (badge) {
+    badge.textContent = hasColor ? 'color' : 'monocromo';
+    badge.classList.toggle('color', hasColor);
+  }
+}
+
+// Reconstruye la full (gris + Float32 + rango log) desde el RGB intacto con el
+// channelMix actual, SÓLO si está marcada como sucia. Idempotente y barato si
+// ya está al día. Lo llaman los consumidores de la full (guardar, auto).
+function ensureFullMix() {
+  if (!fullDirty) return;
+  if (!fullRGB) { fullDirty = false; return; }
+  mixToGray(fullRGB, fullData, channelMix);
+  fullF32 = to16f(fullData);
+  computeNegLogRange();   // exacto sobre la full
+  fullDirty = false;
+}
+
+// Aplica el channelMix actual y refresca lo derivado.
+//   previewOnly=true  (arrastre en vivo): sólo remezcla la PREVIEW y el rango
+//                     log aproximado sobre ella; marca la full sucia. Barato.
+//   previewOnly=false (presets, soltar, undo, carga): hace también la full ya,
+//                     dejándola limpia. Equivale al comportamiento anterior.
+function applyChannelMix(previewOnly) {
+  if (!previewRGB || !fullRGB) return;
+
+  // 1. Re-mezclar gris de la PREVIEW desde el RGB intacto y regenerar su caché.
+  mixToGray(previewRGB, previewData, channelMix);
+  previewF32 = to16f(previewData);
+
+  let autoOverride = null;
+  if (previewOnly) {
+    // Rango log APROXIMADO sobre la preview: suficiente para el feedback en vivo
+    // (sólo afecta a los sub-modos Log/Normalizar). El valor EXACTO se recalcula
+    // sobre la full al confirmar (change) o antes de exportar. La full queda sucia.
+    if (previewF32) autoOverride = computeNegLogRangeFor(previewF32);
+    fullDirty = true;
+  } else {
+    // Camino completo: remezcla la full, regenera su caché y el rango exacto.
+    mixToGray(fullRGB, fullData, channelMix);
+    fullF32 = to16f(fullData);
+    computeNegLogRange();
+    fullDirty = false;
+  }
+
+  // Re-aplicar la calibración del picker. En arrastre le pasamos el rango
+  // aproximado de la preview para que NO relea el fullF32 desfasado.
+  applyPickedToPipeline(autoOverride);
+}
+
 function loadFile(file) {
   currentFilename = file.name.replace(/\.[^.]+$/, '');
   const img = new Image();
@@ -1654,13 +1909,19 @@ function loadFile(file) {
     tmpP.width = pw; tmpP.height = ph;
     tmpP.getContext('2d').drawImage(img, 0, 0, pw, ph);
     previewData = tmpP.getContext('2d').getImageData(0, 0, pw, ph);
-    toGray(previewData);
+    // Copia RGB intacta ANTES de convertir a gris, para poder recomputar la
+    // mezcla de canales sin releer del disco.
+    previewRGB = new ImageData(
+      new Uint8ClampedArray(previewData.data), previewData.width, previewData.height);
+    mixToGray(previewRGB, previewData, channelMix);
 
     const tmpF = document.createElement('canvas');
     tmpF.width = fullW; tmpF.height = fullH;
     tmpF.getContext('2d').drawImage(img, 0, 0, fullW, fullH);
     fullData = tmpF.getContext('2d').getImageData(0, 0, fullW, fullH);
-    toGray(fullData);
+    fullRGB = new ImageData(
+      new Uint8ClampedArray(fullData.data), fullData.width, fullData.height);
+    mixToGray(fullRGB, fullData, channelMix);
 
     // Precalcular cachés Float32. to16f es invariante (no depende de los
     // sliders ni del toggle invertir), así que lo hacemos una vez aquí y lo
@@ -1677,6 +1938,12 @@ function loadFile(file) {
     // y 99.5% en lugar de min/max absolutos para descartar píxeles outliers
     // (polvo, hot pixels, esquinas vignetadas) que distorsionarían la normalización.
     computeNegLogRange();
+
+    // Analizar si el scan es monocromo o tiene color real, para abrir o plegar
+    // la sección de Mezcla de canales. Sobre fullRGB (no preview): el downscale
+    // promedia canales y haría ver "más gris" del real. Coste despreciable
+    // (~8000 muestras por stride, una sola vez al cargar).
+    updateMixSectionForImage();
 
     // Limpiar calibración del picker de imágenes anteriores.
     pickedBaseFog = null;
@@ -1979,6 +2246,10 @@ function saveSingle() {
 
   setTimeout(async () => {
     try {
+      // Si la mezcla se ajustó en vivo, la full puede estar desfasada: la
+      // reconstruimos UNA vez aquí (gris + fullF32 + rango log exacto) antes de
+      // exportar. Idempotente si ya estaba al día.
+      ensureFullMix();
       // Para TIFF saltamos el dither de entrada: a 16 bits ese dither sólo
       // genera ruido en los bits bajos sin aportar señal real, contaminando
       // los 8 bits "extra" del archivo y empeorando la compresión Deflate.
@@ -2178,18 +2449,26 @@ async function processBatch() {
 // los datos del pipeline.
 
 // Coordenadas del canvas → muestrear valor lineal promediado 7×7.
-function samplePixelLinear(canvasEl, cx, cy) {
-  const ctx = canvasEl.getContext('2d');
-  const W = canvasEl.width, H = canvasEl.height;
+// Muestrea un valor lineal promediado en ventana 7×7 sobre un ImageData GRIS
+// (previewData), NO sobre el canvas pintado. Desacoplado del canvas a propósito:
+// el canvas original muestra ahora el RGB real del scan, pero el picker debe
+// calibrar sobre el GRIS que alimenta el pipeline (canal R = gris, los 3 iguales).
+// cx, cy están en coordenadas de la imagen (previewW × previewH = dims del gris).
+function samplePixelLinear(imgData, cx, cy) {
+  const W = imgData.width, H = imgData.height;
+  const d = imgData.data;
   const R = 3; // ventana 7×7 → radio 3
   const x0 = Math.max(0, cx - R), y0 = Math.max(0, cy - R);
   const x1 = Math.min(W - 1, cx + R), y1 = Math.min(H - 1, cy + R);
-  const w = x1 - x0 + 1, h = y1 - y0 + 1;
-  const d = ctx.getImageData(x0, y0, w, h).data;
   let sum = 0, n = 0;
-  for (let i = 0; i < d.length; i += 4) { sum += d[i]; n++; }
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      sum += d[(y * W + x) * 4]; // canal R del gris (= gris)
+      n++;
+    }
+  }
   const avg8 = sum / n; // 0..255 en sRGB
-  // Convertir a lineal usando la LUT (consistente con el pipeline)
+  // Convertir a lineal usando la transferencia sRGB (consistente con el pipeline)
   const srgb = avg8 / 255;
   return srgb <= 0.04045 ? srgb / 12.92 : Math.pow((srgb + 0.055) / 1.055, 2.4);
 }
@@ -2227,7 +2506,7 @@ function updatePickerCalibratedUI() {
 //                          positivo) y "Punto negro" (oscuro del positivo).
 //                          → claro del positivo → WHITE. Oscuro → BLACK.
 //                          Sin inversión, los valores van directos a sliders.
-function applyPickedToPipeline() {
+function applyPickedToPipeline(autoOverride) {
   // ── Parte 1: rango log (para sub-modos log/normalize) ──
   // Convenio interno: pickedBaseFog siempre es el píxel más CLARO muestreado
   // (en lineal alto = densidad baja). pickedDmax siempre el más OSCURO
@@ -2236,7 +2515,11 @@ function applyPickedToPipeline() {
   // El rango automático se calcula sobre fullF32 (no preview): el downscale
   // bilinear comprime los extremos del histograma y daría un Drange falso.
   // Ver computeNegLogRange para el análisis detallado.
-  const auto = fullF32 ? computeNegLogRangeFor(fullF32) : { min: 0, max: 3 };
+  //
+  // autoOverride: si se pasa {min,max}, se usa en lugar de releer fullF32. Lo
+  // usa el arrastre de mezcla (full sucia) para pasar el rango APROXIMADO ya
+  // calculado sobre la preview, en vez de leer un fullF32 desfasado.
+  const auto = autoOverride || (fullF32 ? computeNegLogRangeFor(fullF32) : { min: 0, max: 3 });
   if (pickedBaseFog !== null) {
     negLogMin = -Math.log10(Math.max(pickedBaseFog, 1e-6));
   } else {
@@ -2285,7 +2568,7 @@ function applyPickedToPipeline() {
 }
 
 // Actualiza las etiquetas de los botones del picker según el tipo de entrada.
-// En Negativo: "Base+Fog (claro)" y "Dmax (oscuro)" porque son referencias
+// En Negativo: "Base+Velo (claro)" y "Dmax (oscuro)" porque son referencias
 // del negativo. En Positivo: "Pto blanco" y "Pto negro" porque son referencias
 // directas del positivo. La semántica interna (pickedBaseFog = lineal alto,
 // pickedDmax = lineal bajo) se mantiene; sólo cambia el rótulo.
@@ -2363,7 +2646,7 @@ function onPickerHover(ev) {
     document.getElementById('pickerTip').style.display = 'none';
     return;
   }
-  const lin = samplePixelLinear(canvas, cx, cy);
+  const lin = samplePixelLinear(previewData, cx, cy);
   const D = -Math.log10(Math.max(lin, 1e-6));
   const tip = document.getElementById('pickerTip');
   tip.textContent = `lin ${lin.toFixed(4)}  ·  D ${D.toFixed(2)}`;
@@ -2384,7 +2667,7 @@ function onPickerClick(ev) {
   const cx = Math.floor((ev.clientX - rect.left) / rect.width * canvas.width);
   const cy = Math.floor((ev.clientY - rect.top) / rect.height * canvas.height);
   if (cx < 0 || cx >= canvas.width || cy < 0 || cy >= canvas.height) return;
-  const lin = samplePixelLinear(canvas, cx, cy);
+  const lin = samplePixelLinear(previewData, cx, cy);
   if (pickerMode === 'basefog') {
     pickedBaseFog = lin;
     pickedBaseFogXY = [cx, cy];
@@ -2409,7 +2692,9 @@ function resetPicker() {
   setPickerMode(null);
   updatePickerCalibratedUI();
   renderPickerOverlay();
-  // Recalcular el rango log desde los percentiles automáticos
+  // Recalcular el rango log desde los percentiles automáticos. Si la mezcla se
+  // ajustó en vivo, primero ponemos la full al día (barato si ya lo estaba).
+  ensureFullMix();
   if (fullF32) computeNegLogRange();
 }
 
@@ -2553,6 +2838,12 @@ function captureState() {
     slClar:  +document.getElementById('slClar').value,
     inputType: inputType,
     subMode: getSubMode(),
+    // Mezcla de canales: guardamos el % ENTERO del slider (fuente de verdad),
+    // no el float derivado. Así statesEqual compara enteros y nunca da falsos
+    // cambios por precisión de coma flotante.
+    mixR: +document.getElementById('slMixR').value,
+    mixG: +document.getElementById('slMixG').value,
+    mixB: +document.getElementById('slMixB').value,
     pickedBaseFog: pickedBaseFog,
     pickedDmax: pickedDmax,
     pickedBaseFogXY: pickedBaseFogXY ? pickedBaseFogXY.slice() : null,
@@ -2565,7 +2856,7 @@ function captureState() {
 // alterar el historial — pero por si acaso, esta función es la red).
 function statesEqual(a, b) {
   if (!a || !b) return false;
-  const keys = ['slBlack','slWhite','slGamma','slS','slTE0','slTE1','slTE2','slTE3','slTE4','slStr','slClar','inputType','subMode','pickedBaseFog','pickedDmax'];
+  const keys = ['slBlack','slWhite','slGamma','slS','slTE0','slTE1','slTE2','slTE3','slTE4','slStr','slClar','inputType','subMode','mixR','mixG','mixB','pickedBaseFog','pickedDmax'];
   for (const k of keys) if (a[k] !== b[k]) return false;
   return true;
 }
@@ -2610,6 +2901,25 @@ function applySnapshot(snap) {
       const cont = document.getElementById('subModeSel');
       cont.querySelectorAll('.invmode-btn').forEach(b =>
         b.classList.toggle('active', b.dataset.sub === snap.subMode));
+    }
+    // Channel mix: el snapshot guarda % ENTEROS. Los ponemos en los sliders y
+    // derivamos channelMix de ahí. Se hace ANTES de los sliders/picker porque
+    // applyChannelMix regenera los cachés y re-aplica el picker; el render
+    // final de abajo refleja todo junto. Sólo recomputamos si algún % cambió.
+    if (snap.mixR !== undefined) {
+      const curR = +document.getElementById('slMixR').value;
+      const curG = +document.getElementById('slMixG').value;
+      const curB = +document.getElementById('slMixB').value;
+      const changed = snap.mixR !== curR || snap.mixG !== curG || snap.mixB !== curB;
+      const setMix = (slId, vId, pct) => {
+        document.getElementById(slId).value = pct;
+        document.getElementById(vId).textContent = pct;
+      };
+      setMix('slMixR', 'vMixR', snap.mixR);
+      setMix('slMixG', 'vMixG', snap.mixG);
+      setMix('slMixB', 'vMixB', snap.mixB);
+      syncChannelMixFromSliders();
+      if (changed) applyChannelMix();
     }
     // Sliders. Uso setSlider con los mismos decimales que cada uno.
     const decs = {slBlack:0,slWhite:0,slGamma:2,slS:0,slTE0:0,slTE1:0,slTE2:0,slTE3:0,slTE4:0,slStr:0,slClar:0};
@@ -2661,18 +2971,27 @@ function redo() {
 const SLIDER_DEFAULTS = {
   slBlack: 0, slWhite: 255, slGamma: 1.0, slS: 0,
   slTE0: 0, slTE1: 0, slTE2: 0, slTE3: 0, slTE4: 0,
-  slStr: 0, slClar: 0
+  slStr: 0, slClar: 0,
+  // Mezcla de canales: default = verde puro (0/100/0).
+  slMixR: 0, slMixG: 100, slMixB: 0
 };
 const SLIDER_DECIMALS = {
   slBlack: 0, slWhite: 0, slGamma: 2, slS: 0,
   slTE0: 0, slTE1: 0, slTE2: 0, slTE3: 0, slTE4: 0,
-  slStr: 0, slClar: 0
+  slStr: 0, slClar: 0,
+  slMixR: 0, slMixG: 0, slMixB: 0
 };
 const SLIDER_OUT_IDS = {
   slBlack: 'vBlack', slWhite: 'vWhite', slGamma: 'vGamma', slS: 'vS',
   slTE0: 'vTE0', slTE1: 'vTE1', slTE2: 'vTE2', slTE3: 'vTE3', slTE4: 'vTE4',
-  slStr: 'vStr', slClar: 'vClar'
+  slStr: 'vStr', slClar: 'vClar',
+  slMixR: 'vMixR', slMixG: 'vMixG', slMixB: 'vMixB'
 };
+
+// ¿El id corresponde a un slider de la mezcla de canales? Esos, al cambiar,
+// necesitan derivar channelMix y regenerar el gris vía applyChannelMix antes
+// de render(); los sliders de revelado no.
+function isMixSlider(id) { return id === 'slMixR' || id === 'slMixG' || id === 'slMixB'; }
 
 // ¿El foco está sobre uno de NUESTROS sliders?
 function focusedSlider() {
@@ -2710,6 +3029,12 @@ function nudgeSlider(slider, delta) {
   next = +next.toFixed(dec >= 2 ? dec : 4);
   slider.value = next;
   document.getElementById(SLIDER_OUT_IDS[slider.id]).textContent = next.toFixed(dec);
+  // Los sliders de mezcla cambian el gris de partida: hay que derivar channelMix
+  // y regenerar los cachés antes de render. Los de revelado no lo necesitan.
+  if (isMixSlider(slider.id)) {
+    syncChannelMixFromSliders();
+    applyChannelMix();
+  }
   render();
   pushHistory(false); // debounced
 }
@@ -2719,6 +3044,10 @@ function resetOneSlider(slider) {
   const id = slider.id;
   const def = SLIDER_DEFAULTS[id];
   setSlider(id, SLIDER_OUT_IDS[id], def, SLIDER_DECIMALS[id]);
+  if (isMixSlider(id)) {
+    syncChannelMixFromSliders();
+    applyChannelMix();
+  }
   render();
   pushHistory(true);
 }
@@ -2936,7 +3265,73 @@ sliderMap.forEach(([id, outId, dec]) => {
   el.addEventListener('blur',   () => el.parentElement.classList.remove('focused'));
 });
 
-// Drag & drop global
+// Sliders del channel mixer. A diferencia de los sliders de revelado, estos
+// invalidan el caché Float32 (cambian el gris de partida), así que pasan por
+// applyChannelMix() antes de render(). Por eso NO están en sliderMap.
+const mixMap = [['slMixR','vMixR'],['slMixG','vMixG'],['slMixB','vMixB']];
+mixMap.forEach(([id, outId]) => {
+  const el = document.getElementById(id);
+  el.addEventListener('input', function() {
+    document.getElementById(outId).textContent = this.value;
+    syncChannelMixFromSliders(); // deriva channelMix desde los % enteros
+    applyChannelMix(true);       // arrastre en vivo: sólo preview, full sucia
+    render();
+    pushHistory(false); // debounced, igual que los demás sliders
+  });
+  // Al soltar: confirmar la full (limpia el caché completo de una vez) y cerrar
+  // el snapshot del historial.
+  el.addEventListener('change', () => { applyChannelMix(false); pushHistory(true); });
+  el.addEventListener('focus',  () => el.parentElement.classList.add('focused'));
+  el.addEventListener('blur',   () => el.parentElement.classList.remove('focused'));
+});
+
+// Reconstruye channelMix (pesos 0..2) desde los sliders enteros (%, 0..200).
+// El slider entero es la ÚNICA fuente de verdad del peso: channelMix siempre
+// se deriva de él dividiendo por 100. Así nunca hay dos representaciones del
+// mismo valor que puedan divergir (el float exacto guardado vs. el entero que
+// muestra el slider). Cualquier sitio que cambie un slider llama a esto.
+function syncChannelMixFromSliders() {
+  channelMix = [
+    (+document.getElementById('slMixR').value) / 100,
+    (+document.getElementById('slMixG').value) / 100,
+    (+document.getElementById('slMixB').value) / 100,
+  ];
+}
+
+// Fija los tres sliders (en %, ENTEROS 0..200) + deriva el estado + recálculo.
+// Usado por los presets. Recibe porcentajes enteros, no pesos fraccionarios.
+function setChannelMix(rPct, gPct, bPct) {
+  const set = (slId, vId, pct) => {
+    const v = Math.round(pct);
+    document.getElementById(slId).value = v;
+    document.getElementById(vId).textContent = v;
+  };
+  set('slMixR', 'vMixR', rPct);
+  set('slMixG', 'vMixG', gPct);
+  set('slMixB', 'vMixB', bPct);
+  syncChannelMixFromSliders();
+  applyChannelMix();
+  render();
+  pushHistory(true);
+}
+
+// Presets en % enteros. Luma ≈ Rec.709 redondeado (21/72/7): la diferencia con
+// los pesos exactos (21.26/71.52/7.22) es ≪1 LSB en 8 bits, imperceptible, y a
+// cambio "lo que ves es lo que hay" (slider y estado nunca divergen).
+document.getElementById('btnMixGreen').addEventListener('click', () => setChannelMix(0, 100, 0));
+document.getElementById('btnMixLuma').addEventListener('click',  () => setChannelMix(21, 72, 7));
+document.getElementById('btnMixRed').addEventListener('click',   () => setChannelMix(80, 10, 10));
+document.getElementById('btnMixNorm').addEventListener('click', () => {
+  // Normaliza los porcentajes ENTEROS actuales a suma 100 (mantiene brillo
+  // global). Se opera sobre los valores de los sliders, no sobre channelMix,
+  // para que el redondeo final sea coherente con lo que se mostrará.
+  const r = +document.getElementById('slMixR').value;
+  const g = +document.getElementById('slMixG').value;
+  const b = +document.getElementById('slMixB').value;
+  const sum = r + g + b;
+  if (Math.abs(sum) < 1e-6) return; // evitar /0 si los tres son ~0
+  setChannelMix(r / sum * 100, g / sum * 100, b / sum * 100);
+});
 document.addEventListener('dragover', e => {
   e.preventDefault();
   document.getElementById('dropOverlay').classList.add('active');
