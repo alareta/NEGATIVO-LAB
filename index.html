@@ -81,6 +81,26 @@
   }
   .logo span { color: var(--text3); }
   .header-actions { display: flex; gap: 8px; align-items: center; }
+  .lang-toggle {
+    display: flex;
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .lang-btn {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    color: var(--text3);
+    background: transparent;
+    border: none;
+    padding: 3px 9px;
+    cursor: pointer;
+    transition: color 0.15s, background 0.15s;
+  }
+  .lang-btn + .lang-btn { border-left: 1px solid var(--border); }
+  .lang-btn:hover { color: var(--text2); }
+  .lang-btn.active { color: var(--accent); background: var(--bg3); }
   .tag {
     font-family: var(--mono);
     font-size: 10px;
@@ -761,7 +781,11 @@
 <header>
   <div class="logo">Negativo <span>/</span> Lab</div>
   <div class="header-actions">
-    <span class="tag">v1.1</span>
+    <div class="lang-toggle" role="group" aria-label="Idioma / Language">
+      <button class="lang-btn active" data-lang="es">ES</button>
+      <button class="lang-btn" data-lang="en">EN</button>
+    </div>
+    <span class="tag">v1.2.0</span>
     <span class="tag">B&amp;W · OFFLINE</span>
   </div>
 </header>
@@ -772,17 +796,17 @@
   <aside class="sidebar">
     <div class="sidebar-scroll">
 
-      <div class="section-title">Imagen</div>
+      <div class="section-title" data-i18n="sec_image">Imagen</div>
       <div class="btn-row">
-        <button class="btn" id="btnOpen">&#x25B6; Abrir imagen</button>
+        <button class="btn" id="btnOpen">&#x25B6; <span data-i18n="btn_open">Abrir imagen</span></button>
         <input type="file" id="fileInput" accept="image/*" style="display:none">
       </div>
       <div style="font-family:var(--mono);font-size:9px;color:var(--success);letter-spacing:0.1em;margin-bottom:10px;opacity:0.8">⬡ TPDF · LINEAR · PCHIP</div>
 
       <!-- Tipo de entrada: Negativo / Positivo -->
       <div class="invmode" id="inputTypeSel" role="group" aria-label="Tipo de entrada">
-        <button class="invmode-btn active" data-input="negativo">Negativo</button>
-        <button class="invmode-btn" data-input="positivo">Positivo</button>
+        <button class="invmode-btn active" data-input="negativo" data-i18n="type_negative">Negativo</button>
+        <button class="invmode-btn" data-input="positivo" data-i18n="type_positive">Positivo</button>
       </div>
 
       <!-- Sub-modo. Su contenido se rellena por JS (rebuildSubModeUI)
@@ -802,90 +826,90 @@
         </button>
       </div>
       <div class="btn-row">
-        <button class="btn" id="btnAuto">⚡ Auto niveles</button>
-        <button class="btn" id="btnReset">↺ Resetear</button>
+        <button class="btn" id="btnAuto">⚡ <span data-i18n="btn_auto">Auto niveles</span></button>
+        <button class="btn" id="btnReset">↺ <span data-i18n="btn_reset">Resetear</span></button>
       </div>
 
       <details class="mix-section" id="mixSection">
-        <summary><span class="mix-summary-title">Mezcla de canales</span><span class="mix-badge" id="mixBadge"></span></summary>
+        <summary><span class="mix-summary-title" data-i18n="sec_mix">Mezcla de canales</span><span class="mix-badge" id="mixBadge"></span></summary>
         <div class="mix-body">
-          <div class="sl-row"><label>Rojo</label><input type="range" id="slMixR" min="-50" max="200" step="1" value="0"><span class="val" id="vMixR">0</span></div>
-          <div class="sl-row"><label>Verde</label><input type="range" id="slMixG" min="-50" max="200" step="1" value="100"><span class="val" id="vMixG">100</span></div>
-          <div class="sl-row"><label>Azul</label><input type="range" id="slMixB" min="-50" max="200" step="1" value="0"><span class="val" id="vMixB">0</span></div>
+          <div class="sl-row"><label data-i18n="ch_red">Rojo</label><input type="range" id="slMixR" min="-50" max="200" step="1" value="0"><span class="val" id="vMixR">0</span></div>
+          <div class="sl-row"><label data-i18n="ch_green">Verde</label><input type="range" id="slMixG" min="-50" max="200" step="1" value="100"><span class="val" id="vMixG">100</span></div>
+          <div class="sl-row"><label data-i18n="ch_blue">Azul</label><input type="range" id="slMixB" min="-50" max="200" step="1" value="0"><span class="val" id="vMixB">0</span></div>
           <div class="btn-row">
-            <button class="btn" id="btnMixGreen" title="Verde puro (comportamiento clásico de la app)">Verde</button>
-            <button class="btn" id="btnMixLuma" title="Luminancia Rec.709 perceptual">Luma</button>
-            <button class="btn" id="btnMixRed" title="Realza cielos y piel, oscurece follaje">Rojo</button>
-            <button class="btn" id="btnMixNorm" title="Reescala los tres pesos para que sumen 100% sin cambiar el brillo global">Normalizar</button>
+            <button class="btn" id="btnMixGreen" data-i18n-title="tip_mix_green" data-i18n="preset_green" title="Verde puro (comportamiento clásico de la app)">Verde</button>
+            <button class="btn" id="btnMixLuma" data-i18n-title="tip_mix_luma" data-i18n="preset_luma" title="Luminancia Rec.709 perceptual">Luma</button>
+            <button class="btn" id="btnMixRed" data-i18n-title="tip_mix_red" data-i18n="preset_red" title="Realza cielos y piel, oscurece follaje">Rojo</button>
+            <button class="btn" id="btnMixNorm" data-i18n-title="tip_mix_norm" data-i18n="preset_norm" title="Reescala los tres pesos para que sumen 100% sin cambiar el brillo global">Normalizar</button>
           </div>
         </div>
       </details>
 
-      <div class="section-title">Rango tonal</div>
-      <div class="sl-row"><label>Punto negro</label><input type="range" id="slBlack" min="0" max="200" step="1" value="0"><span class="val" id="vBlack">0</span></div>
-      <div class="sl-row"><label>Punto blanco</label><input type="range" id="slWhite" min="55" max="255" step="1" value="255"><span class="val" id="vWhite">255</span></div>
-      <div class="sl-row"><label>Gamma</label><input type="range" id="slGamma" min="0.3" max="3.0" step="0.05" value="1.0"><span class="val" id="vGamma">1.00</span></div>
-      <div class="sl-row"><label>Curva S</label><input type="range" id="slS" min="0" max="100" step="1" value="0"><span class="val" id="vS">0</span></div>
-      <div class="clip-toggle-row" title="Sobre el procesado: rojo=luces recortadas, azul=sombras recortadas">
-        <label for="chkClip" class="clip-label">Mostrar recorte</label>
+      <div class="section-title" data-i18n="sec_tonal">Rango tonal</div>
+      <div class="sl-row"><label data-i18n="lvl_black">Punto negro</label><input type="range" id="slBlack" min="0" max="200" step="1" value="0"><span class="val" id="vBlack">0</span></div>
+      <div class="sl-row"><label data-i18n="lvl_white">Punto blanco</label><input type="range" id="slWhite" min="55" max="255" step="1" value="255"><span class="val" id="vWhite">255</span></div>
+      <div class="sl-row"><label data-i18n="lvl_gamma">Gamma</label><input type="range" id="slGamma" min="0.3" max="3.0" step="0.05" value="1.0"><span class="val" id="vGamma">1.00</span></div>
+      <div class="sl-row"><label data-i18n="lvl_scurve">Curva S</label><input type="range" id="slS" min="0" max="100" step="1" value="0"><span class="val" id="vS">0</span></div>
+      <div class="clip-toggle-row" data-i18n-title="tip_clip" title="Sobre el procesado: rojo=luces recortadas, azul=sombras recortadas">
+        <label for="chkClip" class="clip-label" data-i18n="clip_show">Mostrar recorte</label>
         <span class="clip-swatch clip-low"></span>
         <span class="clip-swatch clip-high"></span>
         <input type="checkbox" id="chkClip" class="clip-checkbox">
       </div>
 
-      <div class="section-title">Ecualizador tonal</div>
-      <div class="sl-row"><label>Negros</label><input type="range" id="slTE0" min="-100" max="100" step="1" value="0"><span class="val" id="vTE0">0</span></div>
-      <div class="sl-row"><label>Sombras</label><input type="range" id="slTE1" min="-100" max="100" step="1" value="0"><span class="val" id="vTE1">0</span></div>
-      <div class="sl-row"><label>Medios</label><input type="range" id="slTE2" min="-100" max="100" step="1" value="0"><span class="val" id="vTE2">0</span></div>
-      <div class="sl-row"><label>Luces</label><input type="range" id="slTE3" min="-100" max="100" step="1" value="0"><span class="val" id="vTE3">0</span></div>
-      <div class="sl-row"><label>Blancos</label><input type="range" id="slTE4" min="-100" max="100" step="1" value="0"><span class="val" id="vTE4">0</span></div>
+      <div class="section-title" data-i18n="sec_eq">Ecualizador tonal</div>
+      <div class="sl-row"><label data-i18n="eq_blacks">Negros</label><input type="range" id="slTE0" min="-100" max="100" step="1" value="0"><span class="val" id="vTE0">0</span></div>
+      <div class="sl-row"><label data-i18n="eq_shadows">Sombras</label><input type="range" id="slTE1" min="-100" max="100" step="1" value="0"><span class="val" id="vTE1">0</span></div>
+      <div class="sl-row"><label data-i18n="eq_mids">Medios</label><input type="range" id="slTE2" min="-100" max="100" step="1" value="0"><span class="val" id="vTE2">0</span></div>
+      <div class="sl-row"><label data-i18n="eq_highlights">Luces</label><input type="range" id="slTE3" min="-100" max="100" step="1" value="0"><span class="val" id="vTE3">0</span></div>
+      <div class="sl-row"><label data-i18n="eq_whites">Blancos</label><input type="range" id="slTE4" min="-100" max="100" step="1" value="0"><span class="val" id="vTE4">0</span></div>
 
-      <div class="section-title">Microcontraste</div>
-      <div class="sl-row"><label>Estructura</label><input type="range" id="slStr" min="0" max="100" step="1" value="0"><span class="val" id="vStr">0</span></div>
-      <div class="sl-row"><label>Claridad</label><input type="range" id="slClar" min="0" max="100" step="1" value="0"><span class="val" id="vClar">0</span></div>
+      <div class="section-title" data-i18n="sec_micro">Microcontraste</div>
+      <div class="sl-row"><label data-i18n="micro_structure">Estructura</label><input type="range" id="slStr" min="0" max="100" step="1" value="0"><span class="val" id="vStr">0</span></div>
+      <div class="sl-row"><label data-i18n="micro_clarity">Claridad</label><input type="range" id="slClar" min="0" max="100" step="1" value="0"><span class="val" id="vClar">0</span></div>
 
     </div><!-- /sidebar-scroll -->
 
     <div class="sidebar-footer">
       <details class="shortcuts" id="shortcutsPanel">
-        <summary>⌘ Atajos</summary>
+        <summary><span data-i18n="shortcuts_title">⌘ Atajos</span></summary>
         <div class="shortcut-list">
-          <div class="sec">Archivo</div>
-          <kbd>O</kbd><span>Abrir imagen</span>
-          <kbd>S</kbd><span>Guardar</span>
-          <kbd>⇧</kbd><kbd>S</kbd><span style="grid-column:2/-1">Alternar PNG / TIFF</span>
+          <div class="sec" data-i18n="sc_file">Archivo</div>
+          <kbd>O</kbd><span data-i18n="sc_open">Abrir imagen</span>
+          <kbd>S</kbd><span data-i18n="sc_save">Guardar</span>
+          <kbd>⇧</kbd><kbd>S</kbd><span style="grid-column:2/-1" data-i18n="sc_togglefmt">Alternar PNG / TIFF</span>
 
-          <div class="sec">Vista</div>
-          <kbd>1</kbd><span>Vista única</span>
-          <kbd>2</kbd><span>Lote</span>
-          <kbd>N</kbd><span>Negativo</span>
-          <kbd>P</kbd><span>Positivo</span>
+          <div class="sec" data-i18n="sc_view">Vista</div>
+          <kbd>1</kbd><span data-i18n="sc_single">Vista única</span>
+          <kbd>2</kbd><span data-i18n="sc_batch">Lote</span>
+          <kbd>N</kbd><span data-i18n="type_negative">Negativo</span>
+          <kbd>P</kbd><span data-i18n="type_positive">Positivo</span>
 
-          <div class="sec">Herramientas</div>
-          <kbd>B</kbd><span>Picker Base+Velo</span>
-          <kbd>D</kbd><span>Picker Dmax</span>
-          <kbd>C</kbd><span>Mostrar recorte</span>
-          <kbd>A</kbd><span>Auto niveles</span>
-          <kbd>R</kbd><span>Resetear</span>
-          <kbd>Esc</kbd><span>Cancelar picker</span>
+          <div class="sec" data-i18n="sc_tools">Herramientas</div>
+          <kbd>B</kbd><span data-i18n="sc_pickbf">Picker Base+Velo</span>
+          <kbd>D</kbd><span data-i18n="sc_pickdmax">Picker Dmax</span>
+          <kbd>C</kbd><span data-i18n="clip_show">Mostrar recorte</span>
+          <kbd>A</kbd><span data-i18n="btn_auto">Auto niveles</span>
+          <kbd>R</kbd><span data-i18n="btn_reset">Resetear</span>
+          <kbd>Esc</kbd><span data-i18n="sc_cancelpick">Cancelar picker</span>
 
-          <div class="sec">Sliders</div>
-          <kbd>Tab</kbd><span>Foco siguiente</span>
-          <kbd>⇧</kbd><kbd>Tab</kbd><span style="grid-column:2/-1">Foco anterior</span>
-          <kbd>←</kbd><kbd>→</kbd><span style="grid-column:2/-1">±1 al slider con foco</span>
-          <kbd>⇧</kbd><kbd>←</kbd><span style="grid-column:2/-1">±10 al slider con foco</span>
-          <kbd>0</kbd><span>Resetear ese slider</span>
+          <div class="sec" data-i18n="sc_sliders">Sliders</div>
+          <kbd>Tab</kbd><span data-i18n="sc_focusnext">Foco siguiente</span>
+          <kbd>⇧</kbd><kbd>Tab</kbd><span style="grid-column:2/-1" data-i18n="sc_focusprev">Foco anterior</span>
+          <kbd>←</kbd><kbd>→</kbd><span style="grid-column:2/-1" data-i18n="sc_nudge1">±1 al slider con foco</span>
+          <kbd>⇧</kbd><kbd>←</kbd><span style="grid-column:2/-1" data-i18n="sc_nudge10">±10 al slider con foco</span>
+          <kbd>0</kbd><span data-i18n="sc_resetslider">Resetear ese slider</span>
 
-          <div class="sec">Historial</div>
-          <kbd>Z</kbd><span>Deshacer</span>
-          <kbd>⇧</kbd><kbd>Z</kbd><span style="grid-column:2/-1">Rehacer</span>
+          <div class="sec" data-i18n="sc_history">Historial</div>
+          <kbd>Z</kbd><span data-i18n="sc_undo">Deshacer</span>
+          <kbd>⇧</kbd><kbd>Z</kbd><span style="grid-column:2/-1" data-i18n="sc_redo">Rehacer</span>
         </div>
       </details>
       <div class="format-toggle" role="group" aria-label="Formato de exportación">
-        <button class="fmt-btn active" data-format="png" title="PNG 8-bit con dither TPDF. Default recomendado para scans de 8-bit.">PNG <span class="fmt-meta">8-bit</span></button>
-        <button class="fmt-btn" data-format="tiff" title="TIFF 16-bit con compresión Deflate. Útil sólo si vas a aplicar curvas o niveles agresivas en un editor posterior. Para scans 8-bit no aporta más información que el PNG.">TIFF <span class="fmt-meta">16-bit</span></button>
+        <button class="fmt-btn active" data-format="png" data-i18n-title="tip_png" title="PNG 8-bit con dither TPDF. Default recomendado para scans de 8-bit.">PNG <span class="fmt-meta">8-bit</span></button>
+        <button class="fmt-btn" data-format="tiff" data-i18n-title="tip_tiff" title="TIFF 16-bit con compresión Deflate. Útil sólo si vas a aplicar curvas o niveles agresivas en un editor posterior. Para scans 8-bit no aporta más información que el PNG.">TIFF <span class="fmt-meta">16-bit</span></button>
       </div>
-      <button class="btn primary" id="btnSaveSingle">↓ Guardar</button>
+      <button class="btn primary" id="btnSaveSingle">↓ <span data-i18n="btn_save">Guardar</span></button>
     </div>
   </aside>
 
@@ -893,8 +917,8 @@
   <div class="center">
 
     <div class="tabs">
-      <div class="tab active" data-tab="single">Vista única</div>
-      <div class="tab" data-tab="batch">Lote <span id="batchCount" style="font-family:var(--mono);font-size:10px;color:var(--text3);"></span></div>
+      <div class="tab active" data-tab="single"><span data-i18n="tab_single">Vista única</span></div>
+      <div class="tab" data-tab="batch"><span data-i18n="tab_batch">Lote</span> <span id="batchCount" style="font-family:var(--mono);font-size:10px;color:var(--text3);"></span></div>
     </div>
 
     <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
@@ -902,15 +926,15 @@
     <!-- SINGLE VIEW -->
     <div class="view active" id="view-single">
       <div class="canvas-wrap">
-        <div class="canvas-label">ORIGINAL</div>
+        <div class="canvas-label" data-i18n="lbl_original">ORIGINAL</div>
         <div class="canvas-inner" id="origWrap">
-          <div class="empty"><div class="empty-icon">◎</div><p>Sin imagen</p></div>
+          <div class="empty"><div class="empty-icon">◎</div><p data-i18n="empty_noimg">Sin imagen</p></div>
         </div>
       </div>
       <div class="canvas-wrap">
-        <div class="canvas-label">PROCESADO</div>
+        <div class="canvas-label" data-i18n="lbl_processed">PROCESADO</div>
         <div class="canvas-inner" id="outWrap">
-          <div class="empty"><div class="empty-icon">◉</div><p>Sin procesar</p></div>
+          <div class="empty"><div class="empty-icon">◉</div><p data-i18n="empty_noproc">Sin procesar</p></div>
         </div>
       </div>
     </div>
@@ -918,17 +942,17 @@
     <!-- BATCH VIEW -->
     <div class="view" id="view-batch">
       <div class="batch-toolbar">
-        <button class="btn" id="btnAddBatch">+ Añadir imágenes</button>
+        <button class="btn" id="btnAddBatch">+ <span data-i18n="btn_addbatch">Añadir imágenes</span></button>
         <input type="file" id="batchInput" accept="image/*" multiple style="display:none">
-        <button class="btn primary" id="btnProcessBatch">⚡ Procesar lote</button>
-        <button class="btn danger" id="btnClearBatch">✕ Limpiar</button>
-        <span class="batch-info" id="batchInfo">0 imágenes</span>
+        <button class="btn primary" id="btnProcessBatch">⚡ <span data-i18n="btn_processbatch">Procesar lote</span></button>
+        <button class="btn danger" id="btnClearBatch">✕ <span data-i18n="btn_clearbatch">Limpiar</span></button>
+        <span class="batch-info" id="batchInfo">0 <span data-i18n="batch_images_plural">imágenes</span></span>
       </div>
       <div class="batch-grid" id="batchGrid">
         <div style="grid-column:1/-1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 0;gap:12px;color:var(--text3);">
           <div style="font-size:36px;opacity:0.3">⊞</div>
-          <p style="font-family:var(--mono);font-size:11px;letter-spacing:0.1em">Añade imágenes al lote</p>
-          <p style="font-family:var(--mono);font-size:10px;color:var(--text3)">Los ajustes del panel izquierdo se aplicarán a todas</p>
+          <p style="font-family:var(--mono);font-size:11px;letter-spacing:0.1em" data-i18n="batch_empty1">Añade imágenes al lote</p>
+          <p style="font-family:var(--mono);font-size:10px;color:var(--text3)" data-i18n="batch_empty2">Los ajustes del panel izquierdo se aplicarán a todas</p>
         </div>
       </div>
     </div>
@@ -945,7 +969,7 @@
 
 <!-- Drop overlay -->
 <div id="dropOverlay">
-  <div class="drop-msg">Suelta las imágenes aquí</div>
+  <div class="drop-msg" data-i18n="drop_msg">Suelta las imágenes aquí</div>
 </div>
 
 <!-- Picker tooltip -->
@@ -953,6 +977,269 @@
 
 
 <script>
+// ── I18N ────────────────────────────────────────────────────────────────────
+// Diccionario de cadenas de UI por idioma. Todo vive dentro del HTML único
+// (sin .json externos ni librerías ni red). El idioma base es español; el
+// toggle ES|EN del header cambia en caliente. La elección se persiste en
+// localStorage('neglab_lang'). Las cadenas estáticas se marcan en el HTML con
+// data-i18n="clave" (texto) y data-i18n-title="clave" (atributo title). Las
+// cadenas que se generan por JS (sub-modos, etiquetas del picker, estados del
+// lote, badge color/mono, etc.) leen del diccionario vía t(clave) en el punto
+// donde se construyen, y se refrescan al cambiar de idioma en applyLang().
+const I18N = {
+  es: {
+    doc_title: 'Negativo Lab — Expansor de rango tonal',
+    // Sidebar
+    sec_image: 'Imagen',
+    btn_open: 'Abrir imagen',
+    type_negative: 'Negativo',
+    type_positive: 'Positivo',
+    btn_auto: 'Auto niveles',
+    btn_reset: 'Resetear',
+    sec_mix: 'Mezcla de canales',
+    ch_red: 'Rojo',
+    ch_green: 'Verde',
+    ch_blue: 'Azul',
+    preset_green: 'Verde',
+    preset_luma: 'Luma',
+    preset_red: 'Rojo',
+    preset_norm: 'Normalizar',
+    sec_tonal: 'Rango tonal',
+    lvl_black: 'Punto negro',
+    lvl_white: 'Punto blanco',
+    lvl_gamma: 'Gamma',
+    lvl_scurve: 'Curva S',
+    clip_show: 'Mostrar recorte',
+    sec_eq: 'Ecualizador tonal',
+    eq_blacks: 'Negros',
+    eq_shadows: 'Sombras',
+    eq_mids: 'Medios',
+    eq_highlights: 'Luces',
+    eq_whites: 'Blancos',
+    sec_micro: 'Microcontraste',
+    micro_structure: 'Estructura',
+    micro_clarity: 'Claridad',
+    btn_save: 'Guardar',
+    // Sub-modos
+    sub_linear: 'Lineal',
+    sub_srgb: 'sRGB',
+    sub_log: 'Log',
+    sub_normalize: 'Normalizar',
+    // Picker (Negativo)
+    pick_basefog_main: '⊙ Base+Velo',
+    pick_basefog_sub: 'claro',
+    pick_dmax_main: '⊙ Dmax',
+    pick_dmax_sub: 'oscuro',
+    // Picker (Positivo)
+    pick_white_main: '⊙ Pto blanco',
+    pick_white_sub: '↑',
+    pick_black_main: '⊙ Pto negro',
+    pick_black_sub: '↓',
+    // Atajos
+    shortcuts_title: '⌘ Atajos',
+    sc_file: 'Archivo',
+    sc_open: 'Abrir imagen',
+    sc_save: 'Guardar',
+    sc_togglefmt: 'Alternar PNG / TIFF',
+    sc_view: 'Vista',
+    sc_single: 'Vista única',
+    sc_batch: 'Lote',
+    sc_tools: 'Herramientas',
+    sc_pickbf: 'Picker Base+Velo',
+    sc_pickdmax: 'Picker Dmax',
+    sc_cancelpick: 'Cancelar picker',
+    sc_sliders: 'Sliders',
+    sc_focusnext: 'Foco siguiente',
+    sc_focusprev: 'Foco anterior',
+    sc_nudge1: '±1 al slider con foco',
+    sc_nudge10: '±10 al slider con foco',
+    sc_resetslider: 'Resetear ese slider',
+    sc_history: 'Historial',
+    sc_undo: 'Deshacer',
+    sc_redo: 'Rehacer',
+    // Centro / tabs / vistas
+    tab_single: 'Vista única',
+    tab_batch: 'Lote',
+    lbl_original: 'ORIGINAL',
+    lbl_processed: 'PROCESADO',
+    empty_noimg: 'Sin imagen',
+    empty_noproc: 'Sin procesar',
+    // Lote
+    btn_addbatch: 'Añadir imágenes',
+    btn_processbatch: 'Procesar lote',
+    btn_clearbatch: 'Limpiar',
+    batch_images_singular: 'imagen',
+    batch_images_plural: 'imágenes',
+    batch_empty1: 'Añade imágenes al lote',
+    batch_empty2: 'Los ajustes del panel izquierdo se aplicarán a todas',
+    batch_pending: 'pendiente',
+    batch_processing: 'procesando...',
+    batch_done: '✓ listo',
+    // Misc dinámicos
+    drop_msg: 'Suelta las imágenes aquí',
+    badge_color: 'color',
+    badge_mono: 'monocromo',
+    saving: '⏳ Procesando...',
+    img_loaded: 'Imagen cargada:',
+    // Tooltips
+    tip_mix_green: 'Verde puro (comportamiento clásico de la app)',
+    tip_mix_luma: 'Luminancia Rec.709 perceptual',
+    tip_mix_red: 'Realza cielos y piel, oscurece follaje',
+    tip_mix_norm: 'Reescala los tres pesos para que sumen 100% sin cambiar el brillo global',
+    tip_clip: 'Sobre el procesado: rojo=luces recortadas, azul=sombras recortadas',
+    tip_png: 'PNG 8-bit con dither TPDF. Default recomendado para scans de 8-bit.',
+    tip_tiff: 'TIFF 16-bit con compresión Deflate. Útil sólo si vas a aplicar curvas o niveles agresivas en un editor posterior. Para scans 8-bit no aporta más información que el PNG.',
+    pick_bf_title_neg: 'Calibrar el claro del negativo (sombras del positivo)',
+    pick_dmax_title_neg: 'Calibrar el oscuro del negativo (luces del positivo)',
+    pick_white_title_pos: 'Calibrar el punto más claro del positivo',
+    pick_black_title_pos: 'Calibrar el punto más oscuro del positivo',
+  },
+  en: {
+    doc_title: 'Negativo Lab — Tonal range expander',
+    sec_image: 'Image',
+    btn_open: 'Open image',
+    type_negative: 'Negative',
+    type_positive: 'Positive',
+    btn_auto: 'Auto levels',
+    btn_reset: 'Reset',
+    sec_mix: 'Channel mixer',
+    ch_red: 'Red',
+    ch_green: 'Green',
+    ch_blue: 'Blue',
+    preset_green: 'Green',
+    preset_luma: 'Luma',
+    preset_red: 'Red',
+    preset_norm: 'Normalize',
+    sec_tonal: 'Tonal range',
+    lvl_black: 'Black point',
+    lvl_white: 'White point',
+    lvl_gamma: 'Gamma',
+    lvl_scurve: 'S-curve',
+    clip_show: 'Show clipping',
+    sec_eq: 'Tonal equalizer',
+    eq_blacks: 'Blacks',
+    eq_shadows: 'Shadows',
+    eq_mids: 'Midtones',
+    eq_highlights: 'Highlights',
+    eq_whites: 'Whites',
+    sec_micro: 'Microcontrast',
+    micro_structure: 'Structure',
+    micro_clarity: 'Clarity',
+    btn_save: 'Save',
+    sub_linear: 'Linear',
+    sub_srgb: 'sRGB',
+    sub_log: 'Log',
+    sub_normalize: 'Normalize',
+    pick_basefog_main: '⊙ Base+Fog',
+    pick_basefog_sub: 'light',
+    pick_dmax_main: '⊙ Dmax',
+    pick_dmax_sub: 'dark',
+    pick_white_main: '⊙ White pt',
+    pick_white_sub: '↑',
+    pick_black_main: '⊙ Black pt',
+    pick_black_sub: '↓',
+    shortcuts_title: '⌘ Shortcuts',
+    sc_file: 'File',
+    sc_open: 'Open image',
+    sc_save: 'Save',
+    sc_togglefmt: 'Toggle PNG / TIFF',
+    sc_view: 'View',
+    sc_single: 'Single view',
+    sc_batch: 'Batch',
+    sc_tools: 'Tools',
+    sc_pickbf: 'Base+Fog picker',
+    sc_pickdmax: 'Dmax picker',
+    sc_cancelpick: 'Cancel picker',
+    sc_sliders: 'Sliders',
+    sc_focusnext: 'Focus next',
+    sc_focusprev: 'Focus previous',
+    sc_nudge1: '±1 to focused slider',
+    sc_nudge10: '±10 to focused slider',
+    sc_resetslider: 'Reset that slider',
+    sc_history: 'History',
+    sc_undo: 'Undo',
+    sc_redo: 'Redo',
+    tab_single: 'Single view',
+    tab_batch: 'Batch',
+    lbl_original: 'ORIGINAL',
+    lbl_processed: 'PROCESSED',
+    empty_noimg: 'No image',
+    empty_noproc: 'Not processed',
+    btn_addbatch: 'Add images',
+    btn_processbatch: 'Process batch',
+    btn_clearbatch: 'Clear',
+    batch_images_singular: 'image',
+    batch_images_plural: 'images',
+    batch_empty1: 'Add images to the batch',
+    batch_empty2: 'The settings in the left panel apply to all of them',
+    batch_pending: 'pending',
+    batch_processing: 'processing...',
+    batch_done: '✓ done',
+    drop_msg: 'Drop the images here',
+    badge_color: 'color',
+    badge_mono: 'monochrome',
+    saving: '⏳ Processing...',
+    img_loaded: 'Image loaded:',
+    tip_mix_green: 'Pure green (the app\u2019s classic behavior)',
+    tip_mix_luma: 'Perceptual Rec.709 luminance',
+    tip_mix_red: 'Lifts skies and skin, darkens foliage',
+    tip_mix_norm: 'Rescales the three weights to sum 100% without changing overall brightness',
+    tip_clip: 'On the processed image: red = clipped highlights, blue = clipped shadows',
+    tip_png: '8-bit PNG with TPDF dither. Recommended default for 8-bit scans.',
+    tip_tiff: '16-bit TIFF with Deflate compression. Useful only if you\u2019ll apply aggressive curves or levels in a later editor. For 8-bit scans it carries no more information than the PNG.',
+    pick_bf_title_neg: 'Calibrate the light area of the negative (positive shadows)',
+    pick_dmax_title_neg: 'Calibrate the dark area of the negative (positive highlights)',
+    pick_white_title_pos: 'Calibrate the lightest point of the positive',
+    pick_black_title_pos: 'Calibrate the darkest point of the positive',
+  }
+};
+
+let lang = 'es';
+try {
+  const saved = localStorage.getItem('neglab_lang');
+  if (saved === 'es' || saved === 'en') lang = saved;
+} catch (e) { /* localStorage no disponible: arranca en español */ }
+
+// Traduce una clave al idioma actual. Si falta, cae al español y, si tampoco,
+// devuelve la propia clave (señal visible de cadena sin traducir).
+function t(key) {
+  const d = I18N[lang] || I18N.es;
+  if (key in d) return d[key];
+  if (key in I18N.es) return I18N.es[key];
+  return key;
+}
+
+// Recorre el DOM aplicando data-i18n (textContent) y data-i18n-title (title).
+// Luego refresca lo generado por JS que no lleva data-i18n: sub-modos del
+// pipeline, etiquetas del picker, info del lote y badge color/mono.
+function applyLang() {
+  document.documentElement.lang = lang;
+  document.title = t('doc_title');
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    el.textContent = t(el.getAttribute('data-i18n'));
+  });
+  document.querySelectorAll('[data-i18n-title]').forEach(el => {
+    el.title = t(el.getAttribute('data-i18n-title'));
+  });
+  // Botones del toggle
+  document.querySelectorAll('.lang-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.lang === lang));
+  // Dinámicos: sólo si las funciones ya existen (applyLang puede llamarse en init).
+  if (typeof rebuildSubModeUI === 'function') rebuildSubModeUI();
+  if (typeof updatePickerLabelsForType === 'function') updatePickerLabelsForType();
+  if (typeof refreshBatchTexts === 'function') refreshBatchTexts();
+  if (typeof updateBatchInfo === 'function') updateBatchInfo();
+  if (typeof updateMixBadge === 'function') updateMixBadge();
+}
+
+function setLang(l) {
+  if (l !== 'es' && l !== 'en') return;
+  if (l === lang) return;
+  lang = l;
+  try { localStorage.setItem('neglab_lang', l); } catch (e) {}
+  applyLang();
+}
+
 // ── STATE ──────────────────────────────────────────────────────────────────
 let previewData = null, fullData = null;
 let previewW = 0, previewH = 0, fullW = 0, fullH = 0;
@@ -1837,18 +2124,28 @@ function detectHasColor(rgbData) {
   return (colored / valid) >= FRAC_THRESHOLD;
 }
 
+// Último veredicto del análisis color/mono, para poder re-pintar el badge en
+// el idioma actual sin re-ejecutar la detección. null = aún sin imagen.
+let lastHasColor = null;
+
+// Pinta el badge color/monocromo en el idioma actual a partir de lastHasColor.
+function updateMixBadge() {
+  const badge = document.getElementById('mixBadge');
+  if (!badge) return;
+  if (lastHasColor === null) { badge.textContent = ''; badge.classList.remove('color'); return; }
+  badge.textContent = lastHasColor ? t('badge_color') : t('badge_mono');
+  badge.classList.toggle('color', lastHasColor);
+}
+
 // Aplica el veredicto del análisis a la UI: abre/pliega la sección y pone el
 // badge informativo. Se llama desde loadFile tras tener fullRGB.
 function updateMixSectionForImage() {
   const sec = document.getElementById('mixSection');
-  const badge = document.getElementById('mixBadge');
   if (!sec) return;
   const hasColor = detectHasColor(fullRGB);
   sec.open = hasColor;
-  if (badge) {
-    badge.textContent = hasColor ? 'color' : 'monocromo';
-    badge.classList.toggle('color', hasColor);
-  }
+  lastHasColor = hasColor;
+  updateMixBadge();
 }
 
 // Reconstruye la full (gris + Float32 + rango log) desde el RGB intacto con el
@@ -1967,7 +2264,7 @@ function loadFile(file) {
 
     const hint = document.getElementById('saveHint');
     hint.style.display = 'block';
-    hint.innerHTML = `<span style="color:var(--text3)">Imagen cargada:</span> ${fullW}×${fullH}px`;
+    hint.innerHTML = `<span style="color:var(--text3)">${t('img_loaded')}</span> ${fullW}×${fullH}px`;
   };
   img.src = url;
 }
@@ -2241,7 +2538,7 @@ function saveSingle() {
   const p = getParams();
   const btn = document.getElementById('btnSaveSingle');
   const originalLabel = btn.textContent;
-  btn.textContent = '⏳ Procesando...';
+  btn.textContent = t('saving');
   btn.disabled = true;
 
   setTimeout(async () => {
@@ -2277,9 +2574,23 @@ function saveSingle() {
 }
 
 // ── BATCH ───────────────────────────────────────────────────────────────────
+// Re-etiqueta los estados visibles del lote (pendiente/procesando/listo) al
+// cambiar de idioma. Deriva el estado de la clase del item para no depender de
+// comparar el texto anterior. Lo llama applyLang.
+function refreshBatchTexts() {
+  document.querySelectorAll('.batch-item').forEach(item => {
+    const st = item.querySelector('.batch-status');
+    if (!st) return;
+    if (item.classList.contains('done'))            st.textContent = t('batch_done');
+    else if (item.classList.contains('processing')) st.textContent = t('batch_processing');
+    else                                            st.textContent = t('batch_pending');
+  });
+}
+
 function updateBatchInfo() {
   const n = batchFiles.length;
-  document.getElementById('batchInfo').textContent = n + ' imagen' + (n!==1?'es':'');
+  const word = n === 1 ? t('batch_images_singular') : t('batch_images_plural');
+  document.getElementById('batchInfo').textContent = n + ' ' + word;
   document.getElementById('batchCount').textContent = n > 0 ? `(${n})` : '';
 }
 
@@ -2295,7 +2606,7 @@ function renderBatchGrid() {
   const grid = document.getElementById('batchGrid');
   grid.innerHTML = '';
   if (batchFiles.length === 0) {
-    grid.innerHTML = '<div style="grid-column:1/-1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 0;gap:12px;color:var(--text3);"><div style="font-size:36px;opacity:0.3">⊞</div><p style="font-family:var(--mono);font-size:11px;letter-spacing:0.1em">Añade imágenes al lote</p></div>';
+    grid.innerHTML = '<div style="grid-column:1/-1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 0;gap:12px;color:var(--text3);"><div style="font-size:36px;opacity:0.3">⊞</div><p style="font-family:var(--mono);font-size:11px;letter-spacing:0.1em">' + t('batch_empty1') + '</p></div>';
     return;
   }
   batchFiles.forEach((f, idx) => {
@@ -2315,7 +2626,7 @@ function renderBatchGrid() {
     const status = document.createElement('div');
     status.className = 'batch-status';
     status.id = 'bstatus-' + idx;
-    status.textContent = 'pendiente';
+    status.textContent = t('batch_pending');
 
     item.appendChild(thumbWrap);
     item.appendChild(name);
@@ -2349,7 +2660,7 @@ async function processBatch() {
     const item = document.getElementById('bitem-' + idx);
     const statusEl = document.getElementById('bstatus-' + idx);
     if (item) item.className = 'batch-item processing';
-    if (statusEl) statusEl.textContent = 'procesando...';
+    if (statusEl) statusEl.textContent = t('batch_processing');
 
     await new Promise(resolve => {
       const img = new Image();
@@ -2398,7 +2709,7 @@ async function processBatch() {
         openForSave(blob, base + '_neglab' + ext);
 
         if (item) item.className = 'batch-item done';
-        if (statusEl) statusEl.textContent = '✓ listo';
+        if (statusEl) statusEl.textContent = t('batch_done');
 
         batchProcessed++;
         fill.style.width = Math.round(batchProcessed/batchFiles.length*100)+'%';
@@ -2576,19 +2887,19 @@ function updatePickerLabelsForType() {
   const bf = document.getElementById('btnPickBaseFog');
   const dm = document.getElementById('btnPickDmax');
   if (inputType === 'negativo') {
-    bf.querySelector('.label-main').textContent = '⊙ Base+Velo';
-    bf.querySelector('.label-sub').textContent  = 'claro';
-    bf.title = 'Calibrar el claro del negativo (sombras del positivo)';
-    dm.querySelector('.label-main').textContent = '⊙ Dmax';
-    dm.querySelector('.label-sub').textContent  = 'oscuro';
-    dm.title = 'Calibrar el oscuro del negativo (luces del positivo)';
+    bf.querySelector('.label-main').textContent = t('pick_basefog_main');
+    bf.querySelector('.label-sub').textContent  = t('pick_basefog_sub');
+    bf.title = t('pick_bf_title_neg');
+    dm.querySelector('.label-main').textContent = t('pick_dmax_main');
+    dm.querySelector('.label-sub').textContent  = t('pick_dmax_sub');
+    dm.title = t('pick_dmax_title_neg');
   } else {
-    bf.querySelector('.label-main').textContent = '⊙ Pto blanco';
-    bf.querySelector('.label-sub').textContent  = '↑';
-    bf.title = 'Calibrar el punto más claro del positivo';
-    dm.querySelector('.label-main').textContent = '⊙ Pto negro';
-    dm.querySelector('.label-sub').textContent  = '↓';
-    dm.title = 'Calibrar el punto más oscuro del positivo';
+    bf.querySelector('.label-main').textContent = t('pick_white_main');
+    bf.querySelector('.label-sub').textContent  = t('pick_white_sub');
+    bf.title = t('pick_white_title_pos');
+    dm.querySelector('.label-main').textContent = t('pick_black_main');
+    dm.querySelector('.label-sub').textContent  = t('pick_black_sub');
+    dm.title = t('pick_black_title_pos');
   }
 }
 
@@ -2755,9 +3066,9 @@ function rebuildSubModeUI() {
   const cont = document.getElementById('subModeSel');
   let opts;
   if (inputType === 'negativo') {
-    opts = [['linear','Lineal'], ['srgb','sRGB'], ['log','Log']];
+    opts = [['linear', t('sub_linear')], ['srgb', t('sub_srgb')], ['log', t('sub_log')]];
   } else {
-    opts = [['linear','Lineal'], ['normalize','Normalizar']];
+    opts = [['linear', t('sub_linear')], ['normalize', t('sub_normalize')]];
   }
   const current = subModeByType[inputType];
   cont.innerHTML = opts.map(([v,l]) =>
@@ -3367,12 +3678,22 @@ const ro = new ResizeObserver(() => {
 ro.observe(document.getElementById('histStrip'));
 ro.observe(document.querySelector('.center'));
 
+// Toggle de idioma ES|EN del header.
+document.querySelectorAll('.lang-btn').forEach(btn => {
+  btn.addEventListener('click', () => setLang(btn.dataset.lang));
+});
+
 // Inicialización del UI dependiente del tipo de entrada.
 // rebuildSubModeUI puebla el selector de sub-modo con las opciones del tipo
 // actual (default 'negativo'). updatePickerLabelsForType ajusta las etiquetas
 // de los pickers a su nombre canónico para ese tipo.
 rebuildSubModeUI();
 updatePickerLabelsForType();
+
+// Aplicar el idioma activo (recuperado de localStorage o 'es' por defecto) a
+// todo el DOM ya construido. Va al final, cuando todas las funciones que
+// applyLang invoca (rebuildSubModeUI, updatePickerLabelsForType, etc.) existen.
+applyLang();
 </script>
 </body>
 </html>
