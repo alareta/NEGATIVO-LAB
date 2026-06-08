@@ -31,10 +31,11 @@ transfer curves (not γ≈2.2 approximations). TPDF dithered 8-bit output and
 optional 16-bit TIFF with Deflate + horizontal predictor — written from
 scratch, no external libs.
 
-> **v1.1** — adds the RGB→gray channel mixer for color negatives and toned
-> scans, plus automatic color/monochrome detection. The default mix is the
-> pure green channel, bit-for-bit identical to previous behavior: with nothing
-> touched, nothing changes. See [Releases](../../releases) for the full changelog.
+> **v1.5** — adds a **16-bit grayscale TIFF reader** (uncompressed or Deflate,
+> with optional horizontal predictor) so B&W 16-bit scans keep their full
+> precision through the whole pipeline, and an **inspection loupe** over the
+> processed image that re-develops the area under the cursor at full
+> resolution. See [Releases](../../releases) for the full changelog.
 
 ### How to use
 
@@ -46,7 +47,9 @@ scratch, no external libs.
    or a preset) to decide which chromatic info feeds the gray. For a neutral
    B&W scan you can leave it on the green-channel default.
 6. Adjust levels, gamma, the 5-zone tonal equalizer, structure and clarity.
-7. **Save** as PNG 8-bit (default) or TIFF 16-bit.
+7. Hover the **processed image** to bring up the loupe and check focus, grain
+   or shadow noise at full resolution. Scroll or `+`/`−` change the zoom.
+8. **Save** as PNG 8-bit (default) or TIFF 16-bit.
 
 For batches: drop several files at once, or open the **Batch** tab. Current
 settings — including the channel mix — are applied to all images.
@@ -57,6 +60,21 @@ settings — including the channel mix — are applied to all images.
   Works offline from `file://`.
 - **Float32 pipeline end-to-end.** Inversion, levels, gamma, tonal curve and
   microcontrast all happen in 32-bit float before quantization.
+- **16-bit grayscale TIFF reader.** B&W 16-bit TIFFs (single channel,
+  uncompressed or Deflate, with or without horizontal predictor) are decoded
+  by a hand-written parser that preserves the full 16 bits into the Float32
+  pipeline — no 8-bit quantization on load. It is the exact inverse of the
+  app's own TIFF writer (verified bit-for-bit round-trip). Other TIFFs (color,
+  LZW, tiled, BigTIFF) and all other formats load via the browser at 8-bit,
+  with a notice. A *16-bit* tag in the load message confirms the high-precision
+  path was used.
+- **Inspection loupe.** Hover the processed image and a loupe follows the
+  cursor, re-developing the patch underneath at **full resolution** (16 bits
+  included) with the current settings — so you see real focus, grain and
+  shadow noise, not an upscaled preview. The patch is processed with a margin
+  so structure/clarity match the exported result exactly, and painted
+  nearest-neighbour to show real pixels. Magnification 1×–8× via scroll or
+  `+`/`−`; it appears automatically and only over the processed image.
 - **RGB→gray channel mixer.** Develop color negatives and toned scans by
   choosing which chromatic channels feed the gray (R/G/B weights, % scale,
   with Green / Luma / Red / Normalize presets). Default is pure green,
@@ -109,6 +127,7 @@ settings — including the channel mix — are applied to all images.
 | `← →` | ±1 on focused slider (mix sliders included) |
 | `⇧← ⇧→` | ±10 on focused slider |
 | `0` | Reset focused slider to default |
+| scroll / `+` `−` | Loupe magnification (over the processed image) |
 | `Z` / `⇧Z` | Undo / Redo |
 
 ### Modes at a glance
@@ -126,11 +145,13 @@ settings — including the channel mix — are applied to all images.
 
 ### Limitations
 
-- Input is 8-bit per channel. The browser's `<img>` quantizes 16-bit PNG/TIFF
-  scans on load, so even with a 16-bit source, the effective input is 8-bit.
-  The Float32 pipeline still benefits the *output*: TPDF dither breaks
-  banding, and the 16-bit TIFF export preserves precision for downstream
-  editing.
+- **Input precision.** B&W 16-bit TIFFs (single channel, uncompressed or
+  Deflate) are read at full 16-bit precision by the built-in parser. Every
+  other format — color TIFFs, 16-bit PNG, LZW/tiled/BigTIFF, JPEG, etc. — is
+  decoded by the browser's `<img>`, which quantizes to 8-bit per channel on
+  load. For those, the effective input is 8-bit; the Float32 pipeline still
+  benefits the *output* (TPDF dither breaks banding, and the 16-bit TIFF
+  export preserves precision for downstream editing).
 - **Monochrome output.** The develop pipeline always collapses to gray. The
   channel mixer lets you handle color negatives and toned scans by choosing
   which chromatic information feeds that gray, but the result is a B&W image —
@@ -171,10 +192,11 @@ PCHIP monótona. Curvas sRGB reales (no aproximaciones γ≈2.2). Salida 8-bit
 con dither TPDF y opción de TIFF 16-bit con Deflate + predictor horizontal —
 escrito a mano, sin librerías externas.
 
-> **v1.1** — añade la mezcla de canales RGB→gris para negativos a color y
-> scans virados, más la detección automática color/monocromo. La mezcla por
-> defecto es el canal verde puro, idéntica bit a bit al comportamiento
-> anterior: sin tocar nada, nada cambia. Changelog completo en
+> **v1.5** — añade un **lector de TIFF grayscale de 16 bits** (sin comprimir o
+> Deflate, con predictor horizontal opcional) para que los scans B&W de 16 bits
+> conserven toda su precisión a lo largo del pipeline, y una **lupa de
+> inspección** sobre la imagen procesada que revela de nuevo a resolución
+> completa la zona bajo el cursor. Changelog completo en
 > [Releases](../../releases).
 
 ### Cómo usarlo
@@ -188,7 +210,10 @@ escrito a mano, sin librerías externas.
    gris. Para un scan B&W neutro puedes dejar el default de canal verde.
 6. Ajusta niveles, gamma, el ecualizador tonal de 5 zonas, structure y
    clarity.
-7. **Guarda** como PNG 8-bit (por defecto) o TIFF 16-bit.
+7. Pasa el ratón por la **imagen procesada** para que aparezca la lupa y
+   comprobar foco, grano o ruido en sombras a resolución real. La rueda o
+   `+`/`−` cambian el aumento.
+8. **Guarda** como PNG 8-bit (por defecto) o TIFF 16-bit.
 
 Para lotes: suelta varios archivos a la vez, o abre la pestaña **Lote**. Los
 ajustes actuales —incluida la mezcla de canales— se aplican a todas las
@@ -201,6 +226,21 @@ imágenes.
 - **Pipeline Float32 de extremo a extremo.** Inversión, niveles, gamma,
   curva tonal y microcontraste se procesan en coma flotante 32-bit antes de
   la cuantización final.
+- **Lector de TIFF grayscale de 16 bits.** Los TIFF B&W de 16 bits (un canal,
+  sin comprimir o Deflate, con o sin predictor horizontal) se decodifican con
+  un parser propio que preserva los 16 bits reales en el pipeline Float32 —sin
+  cuantizar a 8 bits al cargar—. Es el inverso exacto del escritor TIFF de la
+  app (round-trip verificado bit a bit). El resto de TIFF (color, LZW, tiled,
+  BigTIFF) y los demás formatos se cargan vía navegador a 8 bits, con un aviso.
+  Un badge *16-bit* en el mensaje de carga confirma que se usó la vía de alta
+  precisión.
+- **Lupa de inspección.** Al pasar el ratón por la imagen procesada, una lupa
+  sigue al cursor y revela de nuevo la zona bajo él a **resolución completa**
+  (16 bits incluidos) con los ajustes actuales —así ves foco, grano y ruido en
+  sombras reales, no una preview ampliada—. El parche se procesa con un margen
+  para que structure/clarity coincidan exactamente con la exportación, y se
+  pinta nearest-neighbour para mostrar el píxel real. Aumento 1×–8× con la
+  rueda o `+`/`−`; aparece de forma automática y sólo sobre la imagen procesada.
 - **Mezcla de canales RGB→gris.** Revela negativos a color y scans virados
   eligiendo qué canales alimentan el gris (pesos R/G/B en %, con presets
   Verde / Luma / Rojo / Normalizar). El default es verde puro, idéntico a la
@@ -256,6 +296,7 @@ imágenes.
 | `← →` | ±1 al slider con foco (incluidos los de mezcla) |
 | `⇧← ⇧→` | ±10 al slider con foco |
 | `0` | Resetear ese slider al default |
+| rueda / `+` `−` | Aumento de la lupa (sobre la imagen procesada) |
 | `Z` / `⇧Z` | Deshacer / Rehacer |
 
 ### Modos de un vistazo
@@ -273,11 +314,13 @@ imágenes.
 
 ### Limitaciones
 
-- La entrada es 8 bits por canal. El `<img>` del navegador cuantiza los PNG
-  y TIFF de 16 bits al cargarlos, así que aunque el scan sea de 16 bits, la
-  entrada efectiva es 8 bits. El pipeline Float32 sigue beneficiando a la
-  *salida*: el dither TPDF rompe el banding, y la exportación TIFF 16-bit
-  preserva precisión para edición posterior.
+- **Precisión de entrada.** Los TIFF B&W de 16 bits (un canal, sin comprimir o
+  Deflate) se leen a 16 bits reales con el parser integrado. Cualquier otro
+  formato —TIFF a color, PNG de 16 bits, LZW/tiled/BigTIFF, JPEG, etc.— lo
+  decodifica el `<img>` del navegador, que cuantiza a 8 bits por canal al
+  cargar. Para esos, la entrada efectiva es 8 bits; el pipeline Float32 sigue
+  beneficiando a la *salida* (el dither TPDF rompe el banding y la exportación
+  TIFF 16-bit preserva precisión para edición posterior).
 - **Salida monocroma.** El pipeline de revelado siempre colapsa a gris. La
   mezcla de canales permite manejar negativos a color y scans virados
   eligiendo qué información cromática alimenta ese gris, pero el resultado es

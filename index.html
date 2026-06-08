@@ -330,6 +330,40 @@
     object-fit: contain;
     display: block;
   }
+  /* La imagen procesada oculta el cursor: la lupa (automática sobre ella) hace
+     de puntero, con su crucecita central marcando el punto. */
+  #outWrap canvas { cursor: none; }
+
+  /* La lupa: recuadro circular flotante que sigue al cursor. position:fixed
+     sobre el body para no quedar recortada por el overflow:hidden del panel. */
+  .loupe {
+    position: fixed;
+    display: none;
+    border-radius: 50%;
+    border: 2px solid var(--accent, #c8b89a);
+    box-shadow: 0 4px 24px rgba(0,0,0,0.6);
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 9999;
+    background: var(--bg, #1a1a1a);
+  }
+  .loupe canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated; /* refuerzo de nearest-neighbour al ampliar */
+  }
+  .loupe-badge {
+    position: absolute;
+    bottom: 4px;
+    right: 6px;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text2);
+    background: rgba(0,0,0,0.6);
+    border-radius: 3px;
+    padding: 1px 5px;
+  }
 
   /* Histogram strip */
   .hist-strip {
@@ -785,7 +819,7 @@
       <button class="lang-btn active" data-lang="es">ES</button>
       <button class="lang-btn" data-lang="en">EN</button>
     </div>
-    <span class="tag">v1.2.0</span>
+    <span class="tag">v1.5.0</span>
     <span class="tag">B&amp;W · OFFLINE</span>
   </div>
 </header>
@@ -884,6 +918,10 @@
           <kbd>2</kbd><span data-i18n="sc_batch">Lote</span>
           <kbd>N</kbd><span data-i18n="type_negative">Negativo</span>
           <kbd>P</kbd><span data-i18n="type_positive">Positivo</span>
+
+          <div class="sec" data-i18n="sc_loupe">Lupa</div>
+          <kbd>Rueda</kbd><span data-i18n="sc_loupewheel">Aumento de la lupa</span>
+          <kbd>+</kbd><kbd>−</kbd><span style="grid-column:2/-1" data-i18n="sc_loupezoom">Aumento de la lupa</span>
 
           <div class="sec" data-i18n="sc_tools">Herramientas</div>
           <kbd>B</kbd><span data-i18n="sc_pickbf">Picker Base+Velo</span>
@@ -1044,6 +1082,9 @@ const I18N = {
     sc_view: 'Vista',
     sc_single: 'Vista única',
     sc_batch: 'Lote',
+    sc_loupe: 'Lupa',
+    sc_loupezoom: 'Aumento de la lupa',
+    sc_loupewheel: 'Aumento de la lupa',
     sc_tools: 'Herramientas',
     sc_pickbf: 'Picker Base+Velo',
     sc_pickdmax: 'Picker Dmax',
@@ -1081,6 +1122,7 @@ const I18N = {
     badge_mono: 'monocromo',
     saving: '⏳ Procesando...',
     img_loaded: 'Imagen cargada:',
+    tiff_fallback: 'TIFF en formato no soportado (16-bit comprimido distinto de Deflate, color o tiled): cargado a 8 bits.',
     // Tooltips
     tip_mix_green: 'Verde puro (comportamiento clásico de la app)',
     tip_mix_luma: 'Luminancia Rec.709 perceptual',
@@ -1146,6 +1188,9 @@ const I18N = {
     sc_view: 'View',
     sc_single: 'Single view',
     sc_batch: 'Batch',
+    sc_loupe: 'Loupe',
+    sc_loupezoom: 'Loupe magnification',
+    sc_loupewheel: 'Loupe magnification',
     sc_tools: 'Tools',
     sc_pickbf: 'Base+Fog picker',
     sc_pickdmax: 'Dmax picker',
@@ -1180,6 +1225,7 @@ const I18N = {
     badge_mono: 'monochrome',
     saving: '⏳ Processing...',
     img_loaded: 'Image loaded:',
+    tiff_fallback: 'Unsupported TIFF format (16-bit compressed other than Deflate, color, or tiled): loaded as 8-bit.',
     tip_mix_green: 'Pure green (the app\u2019s classic behavior)',
     tip_mix_luma: 'Perceptual Rec.709 luminance',
     tip_mix_red: 'Lifts skies and skin, darkens foliage',
@@ -1926,6 +1972,222 @@ function drawHist(canvasId, wrapId, imgData) {
   ctx.globalAlpha = 1;
 }
 
+// ── LUPA DE INSPECCIÓN (A2, resolución real) ─────────────────────────────────
+// Lupa que sigue al cursor y muestra, ampliada y NÍTIDA, la zona bajo él
+// reprocesada desde fullF32 a resolución completa (16 bits incluidos) con los
+// parámetros de revelado actuales. A diferencia de un zoom CSS sobre la preview
+// (≤800px, que se ve blando al ampliar), aquí se ve el detalle REAL del scan:
+// foco, grano, ruido en sombras a nivel de píxel.
+//
+// Por qué una lupa hace A2 asequible: sólo hay que reprocesar el trocito bajo el
+// cursor (un parche pequeño y de tamaño constante), no toda la región visible.
+// Eso es barato de hacer al vuelo en cada movimiento del ratón (con throttle por
+// requestAnimationFrame), sin los tirones que daría reprocesar un zoom completo.
+//
+// Calidad de borde: processCore aplica structure/clarity (unsharp mask) con
+// radios relativos a refW=fullW. El unsharp necesita contexto alrededor, así que
+// recortamos el parche con un MARGEN extra, procesamos el parche completo y
+// mostramos sólo la parte central. Así el grano/nitidez de la lupa coincide
+// EXACTAMENTE con lo que saldría exportado, sin artefactos de borde.
+let loupeVisible = false;   // visible ahora mismo (cursor sobre la imagen)
+let loupeZoom = 1.5;        // factor de aumento respecto al píxel full (1×..8×)
+const LOUPE_SIZE = 192;     // diámetro del recuadro de la lupa en px de pantalla
+const LOUPE_ZOOM_MIN = 1, LOUPE_ZOOM_MAX = 8;
+const LOUPE_MARGIN = 24;    // margen (px full) alrededor del parche para el unsharp
+let loupeRafPending = false;
+let loupeLastEv = null;     // último mousemove pendiente de procesar
+let loupeSourceWrap = null; // sobre qué canvas está (siempre outWrap)
+
+// Crea (una vez) el elemento DOM de la lupa: un contenedor circular con un canvas
+// dentro y una crucecita central.
+function ensureLoupeEl() {
+  let el = document.getElementById('loupe');
+  if (el) return el;
+  el = document.createElement('div');
+  el.id = 'loupe';
+  el.className = 'loupe';
+  el.style.width = LOUPE_SIZE + 'px';
+  el.style.height = LOUPE_SIZE + 'px';
+  const cv = document.createElement('canvas');
+  cv.id = 'loupeCanvas';
+  cv.width = LOUPE_SIZE; cv.height = LOUPE_SIZE;
+  el.appendChild(cv);
+  const badge = document.createElement('div');
+  badge.className = 'loupe-badge';
+  badge.id = 'loupeBadge';
+  el.appendChild(badge);
+  document.body.appendChild(el);
+  return el;
+}
+
+function hideLoupe() {
+  loupeVisible = false;
+  const el = document.getElementById('loupe');
+  if (el) el.style.display = 'none';
+}
+
+// Reprocesa el parche bajo el cursor y lo pinta en el canvas de la lupa.
+// Reprocesa el parche bajo el cursor y lo pinta en el canvas de la lupa.
+// s: snapshot {clientX, clientY, wrapId}. NO recibimos el evento del DOM porque
+// se difiere a requestAnimationFrame y para entonces ev.currentTarget ya es null
+// (el navegador recicla el evento tras el despacho). Por eso capturamos las
+// coordenadas y el wrap en el momento del mousemove, no el objeto evento.
+function updateLoupe(s) {
+  if (!fullF32 || !previewData) { hideLoupe(); return; }
+  if (pickerMode) { hideLoupe(); return; } // en modo picker la lupa estorba
+  const wrap = document.getElementById(s.wrapId);
+  const cv = wrap && wrap.querySelector('canvas');
+  if (!cv) { hideLoupe(); return; }
+
+  const rect = cv.getBoundingClientRect();
+  // El canvas es un flex item con object-fit:contain. NO podemos asumir que
+  // getBoundingClientRect() coincide con el rectángulo de la imagen: la caja del
+  // canvas puede tener una proporción distinta a la de la imagen (el navegador
+  // puede estirar la caja del flex item), y object-fit:contain pinta la imagen
+  // centrada dentro con letterbox. Para mapear bien, calculamos el rectángulo
+  // REAL de la imagen DENTRO de rect, usando el aspect ratio INTRÍNSECO del
+  // canvas (cv.width/cv.height = previewW/previewH = fullW/fullH), que es la
+  // fuente de verdad y no depende del CSS.
+  const imgAR = cv.width / cv.height;
+  const boxAR = rect.width / rect.height;
+  let drawW, drawH;
+  if (boxAR > imgAR) {
+    // La caja es más ancha que la imagen → letterbox a izquierda y derecha.
+    drawH = rect.height; drawW = drawH * imgAR;
+  } else {
+    // La caja es más alta que la imagen → letterbox arriba y abajo.
+    drawW = rect.width; drawH = drawW / imgAR;
+  }
+  const drawLeft = rect.left + (rect.width  - drawW) / 2;
+  const drawTop  = rect.top  + (rect.height - drawH) / 2;
+
+  // Cursor fuera de la IMAGEN pintada (no de la caja) → ocultar.
+  if (s.clientX < drawLeft || s.clientX > drawLeft + drawW ||
+      s.clientY < drawTop  || s.clientY > drawTop  + drawH) { hideLoupe(); return; }
+
+  // Punto-imagen en coordenadas FULL respecto al rectángulo real de la imagen.
+  const fx = (s.clientX - drawLeft) / drawW * fullW;
+  const fy = (s.clientY - drawTop)  / drawH * fullH;
+
+  // Modelo lente centrada en el CURSOR REAL, sin acotar: la lupa va siempre
+  // centrada en (fx,fy). Si parte de la lente cae fuera de la imagen, se muestra
+  // el fondo (negro de la UI); no se frena en los bordes.
+  const r = LOUPE_SIZE / 2;
+
+  // Cuántos píxeles full caben en la lupa a este aumento. A loupeZoom=2, cada
+  // píxel full ocupa 2px de pantalla, así que entran LOUPE_SIZE/2 píxeles full.
+  const viewPx = Math.max(8, Math.round(LOUPE_SIZE / loupeZoom)); // lado del parche visible, en px full
+  const half = viewPx / 2;
+
+  // Parche con margen para el unsharp, centrado en el cursor (fx,fy), recortado a
+  // los límites de la imagen. La zona del parche fuera de imagen quedará como
+  // fondo (no se reprocesa lo que no existe).
+  let x0 = Math.floor(fx - half - LOUPE_MARGIN);
+  let y0 = Math.floor(fy - half - LOUPE_MARGIN);
+  let x1 = Math.ceil(fx + half + LOUPE_MARGIN);
+  let y1 = Math.ceil(fy + half + LOUPE_MARGIN);
+  x0 = Math.max(0, x0); y0 = Math.max(0, y0);
+  x1 = Math.min(fullW, x1); y1 = Math.min(fullH, y1);
+  const pw = x1 - x0, ph = y1 - y0;
+  if (pw < 2 || ph < 2) { hideLoupe(); return; }
+
+  // Extraer el parche de fullF32 (1 float/píxel) a un buffer contiguo.
+  const patchF32 = new Float32Array(pw * ph);
+  for (let y = 0; y < ph; y++) {
+    const srcRow = (y0 + y) * fullW + x0;
+    patchF32.set(fullF32.subarray(srcRow, srcRow + pw), y * pw);
+  }
+  // processCore necesita un "src" ImageData como forma; con cachedF32 presente no
+  // lee sus datos, sólo se ignora. Le pasamos un ImageData mínimo del tamaño del
+  // parche (barato) para mantener la firma.
+  const patchImg = new ImageData(pw, ph);
+
+  // Reprocesar el parche con los parámetros actuales y refW=fullW (radios de
+  // structure/clarity idénticos a la exportación).
+  const p = getParams();
+  let f;
+  try {
+    f = processCore(patchImg, pw, ph, p, fullW, fullH, patchF32, inputType, getSubMode());
+  } catch (e) {
+    hideLoupe(); return;
+  }
+  const worked = floatToImageData8(f, pw, ph); // RGBA 8-bit del parche procesado
+
+  // Volcar el parche a un canvas temporal para poder muestrearlo escalado.
+  const tmp = document.createElement('canvas');
+  tmp.width = pw; tmp.height = ph;
+  tmp.getContext('2d').putImageData(worked, 0, 0);
+
+  // Pintar la lupa centrada en el cursor real (fx,fy). Fondo negro primero, por
+  // si la zona visible se sale de la imagen (en los bordes se ve el fondo de UI).
+  const el = ensureLoupeEl();
+  const lcv = document.getElementById('loupeCanvas');
+  const lctx = lcv.getContext('2d');
+  lctx.imageSmoothingEnabled = false; // nearest-neighbour: ver el píxel real
+  lctx.fillStyle = '#000';
+  lctx.fillRect(0, 0, LOUPE_SIZE, LOUPE_SIZE);
+  // La zona visible va de (fx-half, fy-half) a (fx+half, fy+half) en coords full.
+  // Origen de esa zona dentro del parche recortado (puede ser negativo si el
+  // parche se recortó por arriba/izquierda; drawImage lo gestiona).
+  const visX = (fx - half) - x0;
+  const visY = (fy - half) - y0;
+  lctx.drawImage(tmp, visX, visY, viewPx, viewPx, 0, 0, LOUPE_SIZE, LOUPE_SIZE);
+
+  // Crucecita central: la lente va centrada en el cursor, así que el punto
+  // señalado siempre cae en el centro de la lupa.
+  const cc = LOUPE_SIZE / 2;
+  lctx.strokeStyle = 'rgba(232,212,176,0.8)';
+  lctx.lineWidth = 1;
+  lctx.beginPath();
+  lctx.moveTo(cc - 8, cc); lctx.lineTo(cc + 8, cc);
+  lctx.moveTo(cc, cc - 8); lctx.lineTo(cc, cc + 8);
+  lctx.stroke();
+
+  // Colocar el recuadro centrado EXACTAMENTE en el cursor.
+  el.style.left = (s.clientX - r) + 'px';
+  el.style.top  = (s.clientY - r) + 'px';
+  el.style.display = 'block';
+  loupeVisible = true;
+  loupeSourceWrap = s.wrapId;
+  const badge = document.getElementById('loupeBadge');
+  if (badge) badge.textContent = loupeZoom.toFixed(loupeZoom < 10 ? 1 : 0) + '×';
+}
+
+// Throttle por rAF: guardamos un SNAPSHOT del último movimiento (no el evento,
+// que el navegador recicla) y procesamos uno por frame. La lupa se activa SOLA
+// al mover el ratón sobre la imagen procesada (no requiere botón ni tecla).
+function onLoupeMove(ev) {
+  loupeLastEv = { clientX: ev.clientX, clientY: ev.clientY, wrapId: ev.currentTarget.id };
+  if (loupeRafPending) return;
+  loupeRafPending = true;
+  requestAnimationFrame(() => {
+    loupeRafPending = false;
+    if (loupeLastEv) updateLoupe(loupeLastEv);
+  });
+}
+
+// Rueda sobre la imagen: ajusta el aumento de la lupa.
+function onLoupeWheel(ev) {
+  if (pickerMode) return;
+  ev.preventDefault();
+  const factor = ev.deltaY < 0 ? 1.25 : 0.8;
+  loupeZoom = Math.max(LOUPE_ZOOM_MIN, Math.min(LOUPE_ZOOM_MAX, loupeZoom * factor));
+  // Actualizar el snapshot con la posición actual del cursor antes de repintar.
+  loupeLastEv = { clientX: ev.clientX, clientY: ev.clientY, wrapId: ev.currentTarget.id };
+  updateLoupe(loupeLastEv);
+}
+
+// Cablear listeners. La lupa funciona SÓLO sobre la imagen PROCESADA (outWrap),
+// no sobre la original. Activación automática: aparece al entrar el ratón y se
+// oculta al salir.
+function initLoupeControls() {
+  const wrap = document.getElementById('outWrap');
+  if (!wrap) return;
+  wrap.addEventListener('mousemove', onLoupeMove);
+  wrap.addEventListener('mouseleave', hideLoupe);
+  wrap.addEventListener('wheel', onLoupeWheel, { passive: false });
+}
+
 // ── RENDER ──────────────────────────────────────────────────────────────────
 function render() {
   if (!previewData) return;
@@ -1970,9 +2232,201 @@ function render() {
   cx.width = previewW; cx.height = previewH;
   cx.getContext('2d').putImageData(worked, 0, 0);
 
-  // Reposicionar overlay del picker (el canvas puede haber cambiado de tamaño
-  // por relayout del contenedor).
+  // Reposicionar el overlay del picker sobre el rect actual del canvas (puede
+  // haberse recreado en este render, o cambiado de tamaño por relayout).
   renderPickerOverlay();
+}
+
+// ── LECTOR TIFF 16-BIT B&N ───────────────────────────────────────────────────
+// Lee un TIFF baseline de 1 canal, 16 bits/sample, sin comprimir o con Deflate
+// (+ predictor horizontal opcional). Es el camino INVERSO de floatToTiff16: lo
+// que esta app exporta, esta app lo vuelve a leer (round-trip). Devuelve
+// { w, h, f32 } con un Float32 por píxel normalizado 0..1 (/65535), o lanza un
+// Error con un código legible si el TIFF no es de este subconjunto soportado
+// (LZW, JPEG-in-TIFF, tiled, BigTIFF, color, 8-bit, etc.). loadFile captura ese
+// error y cae al camino <img> de 8 bits avisando al usuario.
+//
+// Diseño: NO es un parser TIFF general. Sólo entiende lo justo para 16-bit gris.
+// Cualquier cosa fuera de ese subconjunto se rechaza explícitamente en vez de
+// intentar adivinar; el fallback de 8 bits siempre está detrás como red.
+//
+// Endianness: el TIFF declara su propio orden de bytes en los 2 primeros bytes
+// (II=little, MM=big). Respetamos AMBOS al leer cabecera/IFD y al desempaquetar
+// los samples de 16 bits, porque un TIFF big-endian es perfectamente legal y
+// algunos escáneres lo producen.
+async function parseTiff16Gray(buffer) {
+  const dv = new DataView(buffer);
+  if (dv.byteLength < 8) throw new Error('TIFF_TRUNCADO');
+
+  // Byte order
+  const b0 = dv.getUint8(0), b1 = dv.getUint8(1);
+  let le;
+  if (b0 === 0x49 && b1 === 0x49) le = true;        // 'II'
+  else if (b0 === 0x4D && b1 === 0x4D) le = false;  // 'MM'
+  else throw new Error('NO_TIFF');
+
+  const magic = dv.getUint16(2, le);
+  if (magic === 43) throw new Error('BIGTIFF_NO_SOPORTADO');
+  if (magic !== 42) throw new Error('NO_TIFF');
+
+  const ifdOffset = dv.getUint32(4, le);
+  if (ifdOffset === 0 || ifdOffset + 2 > dv.byteLength) throw new Error('IFD_INVALIDO');
+
+  const numEntries = dv.getUint16(ifdOffset, le);
+  const TYPE_BYTES = { 1:1, 2:1, 3:2, 4:4, 5:8 }; // BYTE/ASCII/SHORT/LONG/RATIONAL
+
+  // Lee el valor (o array de valores) de una entrada IFD. Para tipos que no
+  // caben en los 4 bytes inline, el campo contiene un offset al dato real.
+  function readEntryValues(entryOff) {
+    const type = dv.getUint16(entryOff + 2, le);
+    const count = dv.getUint32(entryOff + 4, le);
+    const sz = TYPE_BYTES[type] || 0;
+    const total = sz * count;
+    const inline = total <= 4;
+    const valOff = inline ? (entryOff + 8) : dv.getUint32(entryOff + 8, le);
+    const out = [];
+    for (let i = 0; i < count; i++) {
+      const o = valOff + i * sz;
+      if (type === 3) out.push(dv.getUint16(o, le));
+      else if (type === 4) out.push(dv.getUint32(o, le));
+      else if (type === 1) out.push(dv.getUint8(o));
+      else if (type === 5) out.push(dv.getUint32(o, le) / dv.getUint32(o + 4, le));
+      else out.push(dv.getUint16(o, le)); // best-effort
+    }
+    return out;
+  }
+
+  // Volcamos los tags que nos importan en un mapa.
+  const tags = {};
+  for (let i = 0; i < numEntries; i++) {
+    const entryOff = ifdOffset + 2 + i * 12;
+    if (entryOff + 12 > dv.byteLength) throw new Error('IFD_INVALIDO');
+    const tag = dv.getUint16(entryOff, le);
+    tags[tag] = readEntryValues(entryOff);
+  }
+
+  const first = (t, def) => (tags[t] && tags[t].length ? tags[t][0] : def);
+
+  const width  = first(256, 0);            // ImageWidth
+  const height = first(257, 0);            // ImageLength
+  const bits   = tags[258] ? tags[258][0] : 0; // BitsPerSample (primer canal)
+  const compression = first(259, 1);       // 1=none, 5=LZW, 8=Deflate, 32946=Deflate(old)
+  const samples = first(277, 1);           // SamplesPerPixel
+  const predictor = first(317, 1);         // 1=none, 2=horizontal
+  const sampleFormat = first(339, 1);      // 1=uint, 2=int, 3=float
+
+  // ── Rechazos explícitos (todo lo que no es BN 16-bit uint en strips) ──
+  if (tags[322] || tags[323] || tags[324] || tags[325]) throw new Error('TILED_NO_SOPORTADO');
+  if (!width || !height) throw new Error('DIMENSIONES_INVALIDAS');
+  if (samples !== 1) throw new Error('NO_MONOCROMO'); // color: fuera del alcance de esta versión
+  if (bits !== 16) throw new Error('NO_16BIT');
+  if (sampleFormat !== 1) throw new Error('FORMATO_NO_UINT');
+  if (compression !== 1 && compression !== 8 && compression !== 32946) {
+    throw new Error('COMPRESION_NO_SOPORTADA'); // p.ej. LZW(5), JPEG(7), PackBits(32773)
+  }
+  if (predictor !== 1 && predictor !== 2) throw new Error('PREDICTOR_NO_SOPORTADO');
+
+  const stripOffsets = tags[273];          // StripOffsets
+  const stripByteCounts = tags[279];       // StripByteCounts
+  if (!stripOffsets || !stripOffsets.length) throw new Error('SIN_STRIPS');
+  let rowsPerStrip = first(278, height);   // RowsPerStrip (default: toda la imagen)
+  if (!rowsPerStrip) rowsPerStrip = height;
+
+  const out16 = new Uint16Array(width * height);
+
+  // Descomprime/copia cada strip y vuelca sus filas a out16.
+  for (let s = 0; s < stripOffsets.length; s++) {
+    const off = stripOffsets[s];
+    const cnt = stripByteCounts ? stripByteCounts[s] : (width * rowsPerStrip * 2);
+    const rowStart = s * rowsPerStrip;
+    const rowsHere = Math.min(rowsPerStrip, height - rowStart);
+    if (rowsHere <= 0) break;
+
+    let bytes; // Uint8Array con los bytes (ya descomprimidos) de este strip
+    const raw = new Uint8Array(buffer, off, cnt);
+    if (compression === 1) {
+      bytes = raw;
+    } else {
+      // Deflate (zlib). DecompressionStream('deflate') espera cabecera zlib,
+      // que es justo lo que produce CompressionStream('deflate') al exportar.
+      if (typeof DecompressionStream === 'undefined') throw new Error('SIN_DECOMPRESSIONSTREAM');
+      const ds = new DecompressionStream('deflate');
+      const stream = new Blob([raw]).stream().pipeThrough(ds);
+      bytes = new Uint8Array(await new Response(stream).arrayBuffer());
+    }
+
+    // Desempaquetar samples de 16 bits respetando endianness del archivo.
+    const sdv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const samplesHere = width * rowsHere;
+    const expected = samplesHere * 2;
+    if (sdv.byteLength < expected) throw new Error('STRIP_CORTO');
+
+    // Predictor horizontal: cada sample se almacenó como diferencia con el
+    // anterior en su fila. Reconstruimos sumando acumulado por fila.
+    let k = 0;
+    for (let y = 0; y < rowsHere; y++) {
+      const base = (rowStart + y) * width;
+      if (predictor === 2) {
+        let acc = 0;
+        for (let x = 0; x < width; x++) {
+          acc = (acc + sdv.getUint16(k * 2, le)) & 0xFFFF;
+          out16[base + x] = acc;
+          k++;
+        }
+      } else {
+        for (let x = 0; x < width; x++) {
+          out16[base + x] = sdv.getUint16(k * 2, le);
+          k++;
+        }
+      }
+    }
+  }
+
+  // 16-bit → Float32 0..1. SIN dither de entrada: el dither existe para romper
+  // banding al decuantizar 8 bits; sobre 16 bits reales sólo añadiría ruido en
+  // los bits bajos (misma lógica que to16fNoDither para la exportación).
+  const f32 = new Float32Array(width * height);
+  for (let i = 0; i < f32.length; i++) f32[i] = out16[i] / 65535;
+
+  return { w: width, h: height, f32 };
+}
+
+// Construye un ImageData RGBA gris (8-bit, sólo para visualización y como
+// contenedor que el pipeline necesita) a partir de un Float32 de 1 canal.
+// Los 16 bits REALES viajan por separado en el Float32 que se pasa como caché a
+// processCore; este RGBA es sólo para pintar el canvas y alimentar drawHist
+// (que lee el canal R). El downscale a 8 bits aquí no degrada el procesado.
+function f32GrayToImageData(f32, w, h) {
+  const id = new ImageData(w, h);
+  const d = id.data;
+  for (let i = 0; i < f32.length; i++) {
+    let v = Math.round(f32[i] * 255);
+    if (v < 0) v = 0; else if (v > 255) v = 255;
+    d[i*4] = d[i*4+1] = d[i*4+2] = v;
+    d[i*4+3] = 255;
+  }
+  return id;
+}
+
+// Downscale por caja de un Float32 de 1 canal (full → preview). Promedia bloques
+// de srcW/dstW × srcH/dstH. Suficiente para la preview (la full conserva los 16
+// bits intactos); evita pasar por canvas, que volvería a cuantizar a 8 bits.
+function downscaleF32Gray(src, sw, sh, dw, dh) {
+  const out = new Float32Array(dw * dh);
+  const xr = sw / dw, yr = sh / dh;
+  for (let dy = 0; dy < dh; dy++) {
+    const sy0 = Math.floor(dy * yr), sy1 = Math.max(sy0 + 1, Math.floor((dy + 1) * yr));
+    for (let dx = 0; dx < dw; dx++) {
+      const sx0 = Math.floor(dx * xr), sx1 = Math.max(sx0 + 1, Math.floor((dx + 1) * xr));
+      let sum = 0, n = 0;
+      for (let y = sy0; y < sy1 && y < sh; y++) {
+        const row = y * sw;
+        for (let x = sx0; x < sx1 && x < sw; x++) { sum += src[row + x]; n++; }
+      }
+      out[dy * dw + dx] = n ? sum / n : 0;
+    }
+  }
+  return out;
 }
 
 // ── LOAD FILE ───────────────────────────────────────────────────────────────
@@ -2192,8 +2646,53 @@ function applyChannelMix(previewOnly) {
   applyPickedToPipeline(autoOverride);
 }
 
-function loadFile(file) {
-  currentFilename = file.name.replace(/\.[^.]+$/, '');
+// Cola común a ambos caminos de carga (8-bit vía <img> y 16-bit vía TIFF).
+// Asume que YA están puestos: fullW/H, previewW/H, previewData/fullData,
+// previewRGB/fullRGB, previewF32/fullF32. Hace el resto (rango log, sección de
+// mezcla, reset de picker, autoLevels, render, historial, hint). El parámetro
+// depthLabel es un texto opcional ("16-bit"/"8-bit") para el mensaje de carga.
+function finishLoad(depthLabel) {
+  // Calcular densidades log10 del scan para el modo de inversión 'log'.
+  // Se hace sobre la FULL (no la preview), porque el downscale comprime los
+  // extremos del histograma y daría un Drange falso, muy estrecho, que al
+  // aplicarlo a la full recortaría brutalmente. Percentiles 0.5%/99.5% para
+  // descartar outliers (polvo, hot pixels, esquinas vignetadas).
+  computeNegLogRange();
+
+  // Analizar si el scan es monocromo o tiene color real, para abrir o plegar
+  // la sección de Mezcla de canales.
+  updateMixSectionForImage();
+
+  // Limpiar calibración del picker de imágenes anteriores.
+  pickedBaseFog = null;
+  pickedDmax = null;
+  pickedBaseFogXY = null;
+  pickedDmaxXY = null;
+  setPickerMode(null);
+  updatePickerCalibratedUI();
+
+  // Cada imagen nueva oculta la lupa (si estaba visible sobre la anterior).
+  hideLoupe();
+
+  autoLevels();
+  render();
+
+  // Reset del historial para esta nueva imagen y push del snapshot inicial
+  // (post-autoLevels).
+  history = [];
+  histIdx = -1;
+  if (histDebounceTimer) { clearTimeout(histDebounceTimer); histDebounceTimer = null; }
+  pushHistory(true);
+
+  const hint = document.getElementById('saveHint');
+  hint.style.display = 'block';
+  const depth = depthLabel ? ` <span style="color:var(--text3)">· ${depthLabel}</span>` : '';
+  hint.innerHTML = `<span style="color:var(--text3)">${t('img_loaded')}</span> ${fullW}×${fullH}px${depth}`;
+}
+
+// Camino 8-bit clásico: decodifica vía <img> + canvas (8 bits/canal). Es el
+// fallback universal y soporta todo lo que el navegador sepa decodificar.
+function loadFileViaImage(file, depthLabel) {
   const img = new Image();
   const url = URL.createObjectURL(file);
   img.onload = () => {
@@ -2220,53 +2719,70 @@ function loadFile(file) {
       new Uint8ClampedArray(fullData.data), fullData.width, fullData.height);
     mixToGray(fullRGB, fullData, channelMix);
 
-    // Precalcular cachés Float32. to16f es invariante (no depende de los
-    // sliders ni del toggle invertir), así que lo hacemos una vez aquí y lo
-    // reutilizamos en cada render y en cada guardado. En una imagen 24MP esto
-    // ahorra ~200ms por guardado.
+    // Precalcular cachés Float32 (con dither de entrada: decuantiza 8→float).
     previewF32 = to16f(previewData);
     fullF32 = to16f(fullData);
 
-    // Calcular densidades log10 del scan para el modo de inversión 'log'.
-    // Se hace sobre la FULL (no la preview), porque el downscale bilinear del
-    // navegador comprime los extremos del histograma y daría un Drange falso,
-    // muy estrecho, que al aplicarlo a la full recortaría brutalmente. Ver
-    // computeNegLogRange para el análisis detallado. Usamos percentiles 0.5%
-    // y 99.5% en lugar de min/max absolutos para descartar píxeles outliers
-    // (polvo, hot pixels, esquinas vignetadas) que distorsionarían la normalización.
-    computeNegLogRange();
-
-    // Analizar si el scan es monocromo o tiene color real, para abrir o plegar
-    // la sección de Mezcla de canales. Sobre fullRGB (no preview): el downscale
-    // promedia canales y haría ver "más gris" del real. Coste despreciable
-    // (~8000 muestras por stride, una sola vez al cargar).
-    updateMixSectionForImage();
-
-    // Limpiar calibración del picker de imágenes anteriores.
-    pickedBaseFog = null;
-    pickedDmax = null;
-    pickedBaseFogXY = null;
-    pickedDmaxXY = null;
-    setPickerMode(null);
-    updatePickerCalibratedUI();
-
     URL.revokeObjectURL(url);
-    autoLevels();
-    render();
-
-    // Reset del historial para esta nueva imagen y push del snapshot inicial
-    // (post-autoLevels). Sin esto, los undos podrían "saltar atrás" a estado
-    // de una imagen anterior, que no es lo que el usuario espera.
-    history = [];
-    histIdx = -1;
-    if (histDebounceTimer) { clearTimeout(histDebounceTimer); histDebounceTimer = null; }
-    pushHistory(true);
-
-    const hint = document.getElementById('saveHint');
-    hint.style.display = 'block';
-    hint.innerHTML = `<span style="color:var(--text3)">${t('img_loaded')}</span> ${fullW}×${fullH}px`;
+    finishLoad(depthLabel);
   };
   img.src = url;
+}
+
+// Camino 16-bit: TIFF B&N leído por nuestro parser. Los 16 bits reales viajan
+// en previewF32/fullF32 (un float por píxel); previewData/fullData y
+// previewRGB/fullRGB son RGBA gris de 8 bits SÓLO para visualización y como
+// contenedor que el pipeline espera. La mezcla de canales se bypasea: un BN de
+// 1 canal no tiene información cromática que mezclar (mix = verde puro neutro).
+function loadTiff16(parsed) {
+  fullW = parsed.w; fullH = parsed.h;
+  fullF32 = parsed.f32;
+
+  let pw = fullW, ph = fullH;
+  if (pw > PREVIEW_MAX) { ph = Math.round(ph*PREVIEW_MAX/pw); pw = PREVIEW_MAX; }
+  previewW = pw; previewH = ph;
+
+  // Preview en Float32 por box-downscale (sin pasar por canvas → mantiene
+  // precisión; la full conserva los 16 bits intactos).
+  previewF32 = (pw === fullW && ph === fullH)
+    ? new Float32Array(fullF32)
+    : downscaleF32Gray(fullF32, fullW, fullH, pw, ph);
+
+  // Contenedores RGBA gris de 8 bits (visualización + drawHist + forma que
+  // processCore necesita; los datos reales van por previewF32/fullF32).
+  fullData = f32GrayToImageData(fullF32, fullW, fullH);
+  previewData = f32GrayToImageData(previewF32, pw, ph);
+  fullRGB = new ImageData(new Uint8ClampedArray(fullData.data), fullW, fullH);
+  previewRGB = new ImageData(new Uint8ClampedArray(previewData.data), pw, ph);
+
+  finishLoad('16-bit');
+}
+
+function loadFile(file) {
+  currentFilename = file.name.replace(/\.[^.]+$/, '');
+  const isTiff = /\.tiff?$/i.test(file.name) || file.type === 'image/tiff';
+  if (!isTiff) { loadFileViaImage(file); return; }
+
+  // TIFF: intentar leerlo a 16 bits con nuestro parser. Si no es del subconjunto
+  // soportado (BN 16-bit uint, sin comprimir o Deflate), avisamos y caemos al
+  // camino <img> de 8 bits (que igualmente puede decodificar muchos TIFF).
+  file.arrayBuffer().then(async buf => {
+    try {
+      const parsed = await parseTiff16Gray(buf);
+      loadTiff16(parsed);
+    } catch (err) {
+      console.warn('TIFF 16-bit no leído por el parser propio:', err && err.message);
+      const hint = document.getElementById('saveHint');
+      if (hint) {
+        hint.style.display = 'block';
+        hint.innerHTML = `<span style="color:var(--warn,#d68)">${t('tiff_fallback')}</span>`;
+      }
+      loadFileViaImage(file, '8-bit');
+    }
+  }).catch(err => {
+    console.warn('No se pudo leer el archivo TIFF:', err);
+    loadFileViaImage(file, '8-bit');
+  });
 }
 
 // ── AUTO LEVELS ─────────────────────────────────────────────────────────────
@@ -3018,6 +3534,7 @@ document.querySelectorAll('.tab').forEach(tab => {
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     tab.classList.add('active');
     document.getElementById('view-' + tab.dataset.tab).classList.add('active');
+    if (tab.dataset.tab !== 'single') hideLoupe();
   });
 });
 
@@ -3370,6 +3887,8 @@ function switchTab(name) {
   const t = document.querySelector(`[data-tab="${name}"]`);
   const v = document.getElementById('view-' + name);
   if (t && v) { t.classList.add('active'); v.classList.add('active'); }
+  // La lupa es propia de la vista única; al cambiar de pestaña la ocultamos.
+  if (name !== 'single') hideLoupe();
 }
 
 // Cambia inputType desde teclado. Replica lo que hace el listener del
@@ -3392,7 +3911,7 @@ function setInputTypeKb(t) {
 }
 
 document.addEventListener('keydown', e => {
-  // Esc siempre: cancela picker
+  // Esc siempre: cancela picker.
   if (e.key === 'Escape') {
     if (pickerMode) { setPickerMode(null); e.preventDefault(); }
     return;
@@ -3510,6 +4029,21 @@ document.addEventListener('keydown', e => {
     case 'z':
       undo();
       e.preventDefault();
+      break;
+    case '+':
+    case '=': // '+' sin shift en muchos teclados
+      if (previewData && !pickerMode) {
+        loupeZoom = Math.min(LOUPE_ZOOM_MAX, loupeZoom * 1.25);
+        if (loupeLastEv) updateLoupe(loupeLastEv);
+        e.preventDefault();
+      }
+      break;
+    case '-':
+      if (previewData && !pickerMode) {
+        loupeZoom = Math.max(LOUPE_ZOOM_MIN, loupeZoom / 1.25);
+        if (loupeLastEv) updateLoupe(loupeLastEv);
+        e.preventDefault();
+      }
       break;
   }
 });
@@ -3689,6 +4223,9 @@ document.querySelectorAll('.lang-btn').forEach(btn => {
 // de los pickers a su nombre canónico para ese tipo.
 rebuildSubModeUI();
 updatePickerLabelsForType();
+
+// Cablear la lupa de inspección (sigue al cursor, reprocesa a resolución real).
+initLoupeControls();
 
 // Aplicar el idioma activo (recuperado de localStorage o 'es' por defecto) a
 // todo el DOM ya construido. Va al final, cuando todas las funciones que
