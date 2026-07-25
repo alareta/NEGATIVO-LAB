@@ -1,0 +1,10 @@
+# macOS
+.DS_Store
+
+# Node (solo para los tests; jsdom opcional)
+node_modules/
+package-lock.json
+
+# Editores
+.vscode/
+.idea/
